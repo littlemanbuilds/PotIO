@@ -1,0 +1,100 @@
+{
+  "name": "PotIO",
+  "version": "1.0.0",
+  "description": "Practical zero-allocation potentiometer and joystick input handling for Arduino projects, with calibration, deadzones, smoothing, shaping, slew limiting, stepped controls, and SnapshotBus-friendly frames.",
+  "keywords": [
+    "adc",
+    "analog",
+    "deadzone",
+    "deadzones",
+    "ema",
+    "esp32",
+    "filter",
+    "input",
+    "joystick",
+    "potentiometer",
+    "shaping",
+    "slew",
+    "snapshotbus",
+    "stepped"
+  ],
+  "authors": [
+    {
+      "name": "Little Man Builds",
+      "email": "littlemanbuilds@gmail.com",
+      "maintainer": true
+    }
+  ],
+  "homepage": "https://github.com/LittleManBuilds/PotIO",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/littlemanbuilds/PotIO"
+  },
+  "frameworks": [
+    "arduino"
+  ],
+  "platforms": [
+    "atmelavr",
+    "atmelmegaavr",
+    "atmelsam",
+    "espressif32",
+    "espressif8266",
+    "ststm32",
+    "teensy",
+    "raspberrypi"
+  ],
+  "headers": [
+    "PotIO.h"
+  ],
+  "examples": [
+    "examples/01_LinearPot_Basic/01_LinearPot_Basic.ino",
+    "examples/02_Pot_Calibration/02_Pot_Calibration.ino",
+    "examples/03_ContinuousPot_Advanced/03_ContinuousPot_Advanced.ino",
+    "examples/04_Joystick2D_KY023/04_Joystick2D_KY023.ino",
+    "examples/05_ESP32_ADC/05_ESP32_ADC.ino",
+    "examples/06_Pot_Shaping/06_Pot_Shaping.ino",
+    "examples/07_Pot_Steering/07_Pot_Steering.ino",
+    "examples/08_SteppedPot_ModeKnob/08_SteppedPot_ModeKnob.ino"
+  ],
+  "export": {
+    "include": [
+      "src",
+      "examples",
+      "README.md",
+      "LICENSE",
+      "keywords.txt",
+      ".gitignore",
+      "library.json",
+      "library.properties",
+      "platformio.ini",
+      "platformio.ci.ini"
+    ],
+    "exclude": [
+      "src/main.cpp",
+      ".DS_Store",
+      "**/.DS_Store",
+      "._*",
+      "**/._*",
+      "__MACOSX",
+      "__MACOSX/**",
+      "*.zip",
+      "**/*.zip",
+      "*.o",
+      "*.elf",
+      "*.bin",
+      "*.map",
+      "compile_commands.json",
+      ".pio",
+      ".pio/**",
+      ".vscode",
+      ".vscode/**",
+      "include",
+      "include/**",
+      "lib",
+      "lib/**",
+      "test",
+      "test/**"
+    ]
+  },
+  "license": "MIT"
+}

@@ -1,0 +1,47 @@
+#######################################
+# Datatypes (KEYWORD1)
+#######################################
+PotIO                    KEYWORD1
+PotCalib                 KEYWORD1
+Deadzone                 KEYWORD1
+JitterStats              KEYWORD1
+
+LinearPot                KEYWORD1
+ContinuousPot            KEYWORD1
+Joystick2D               KEYWORD1
+SteppedPot               KEYWORD1
+AnalogStick              KEYWORD1
+
+ArduinoAnalogRead        KEYWORD1
+ArduinoAnalogReadMilliVolts KEYWORD1
+
+EMAFilter                KEYWORD1
+NoFilter                 KEYWORD1
+NoRateLimit              KEYWORD1
+SlewRate                 KEYWORD1
+ShapeIdentity            KEYWORD1
+ShapeCubicExpo           KEYWORD1
+ShapeSoftZone            KEYWORD1
+
+#######################################
+# Methods and Functions (KEYWORD2)
+#######################################
+update                   KEYWORD2
+setConfig                KEYWORD2
+resetState               KEYWORD2
+resetTurns               KEYWORD2
+setTimeSource             KEYWORD2
+state                    KEYWORD2
+frame                    KEYWORD2
+
+makePotAnalog             KEYWORD2
+makePotMilliVolts         KEYWORD2
+makeContinuousPot         KEYWORD2
+makeKnobSticky            KEYWORD2
+makeKnobSmooth            KEYWORD2
+makeKnobJog               KEYWORD2
+makeJoystickKY023         KEYWORD2
+makeSteppedPot            KEYWORD2
+
+setEsp32PinAttenuation    KEYWORD2
+suggest_deadzone_from_jitter KEYWORD2

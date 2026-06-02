@@ -1,0 +1,11 @@
+.pio/
+.vscode/*
+!.vscode/extensions.json
+.DS_Store
+__MACOSX/
+*.zip
+compile_commands.json
+*.o
+*.elf
+*.bin
+*.map
