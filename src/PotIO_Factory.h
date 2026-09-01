@@ -13,11 +13,11 @@
 
 #include <stdint.h>
 
-#include <PotIO_Arduino.h>
-#include <devices/PotIO_LinearPot.h>
-#include <devices/PotIO_ContinuousPot.h>
-#include <devices/PotIO_Joystick2D.h>
-#include <devices/PotIO_SteppedPot.h>
+#include "PotIO_Arduino.h"
+#include "devices/PotIO_LinearPot.h"
+#include "devices/PotIO_ContinuousPot.h"
+#include "devices/PotIO_Joystick2D.h"
+#include "devices/PotIO_SteppedPot.h"
 
 namespace PotIO
 {
@@ -29,7 +29,6 @@ namespace PotIO
      * @tparam Filter Filter type.
      * @tparam Rate Rate limiter type.
      * @tparam Shaper Shaper type.
-     *
      * @param pin ADC pin.
      * @param atten_db ESP32 attenuation in dB (0/3/6/11). Ignored on non-ESP32.
      * @param f Filter instance.
@@ -58,7 +57,6 @@ namespace PotIO
      * @tparam Filter Filter type.
      * @tparam Rate Rate limiter type.
      * @tparam Shaper Shaper type.
-     *
      * @param pin ADC pin.
      * @param c Min/center/max calibration in raw ADC units.
      * @param atten_db ESP32 attenuation in dB (0/3/6/11). Ignored on non-ESP32.
@@ -95,7 +93,6 @@ namespace PotIO
      * @tparam Filter Filter type.
      * @tparam Rate Rate limiter type.
      * @tparam Shaper Shaper type.
-     *
      * @param pin ADC pin.
      * @param atten_db ESP32 attenuation in dB (0/3/6/11).
      * @param f Filter instance.
@@ -112,6 +109,7 @@ namespace PotIO
         using Reader = ArduinoAnalogReadMilliVolts<FullScaleMv>;
         typename LinearPot<Reader, Filter, Rate, Shaper>::Config cfg;
         cfg.reader = Reader(pin);
+        cfg.calib = PotCalib{0u, static_cast<uint16_t>(FullScaleMv / 2), static_cast<uint16_t>(FullScaleMv)};
         cfg.filter = f;
         cfg.rate = rate;
         cfg.shape = s;
@@ -129,7 +127,6 @@ namespace PotIO
      * @tparam Filter Filter type.
      * @tparam Rate Rate limiter type.
      * @tparam Shaper Shaper type.
-     *
      * @param pin ADC pin.
      * @param c Min/center/max calibration in millivolts.
      * @param atten_db ESP32 attenuation in dB (0/3/6/11).
@@ -163,7 +160,6 @@ namespace PotIO
      * @tparam Filter Filter type.
      * @tparam Rate Rate limiter type.
      * @tparam Shaper Shaper type.
-     *
      * @param pin ADC pin.
      * @param c Min/center/max calibration in raw ADC units.
      * @param atten_db ESP32 attenuation in dB (0/3/6/11). Ignored on non-ESP32.
@@ -209,11 +205,11 @@ namespace PotIO
      * @tparam SY Y-axis shaper type.
      * @tparam ComputeMag Whether to compute magnitude.
      * @tparam ComputeAngle Whether to compute angle.
-     *
      * @param pinX ADC pin for X axis.
      * @param pinY ADC pin for Y axis.
      * @param dz Deadzone strategy.
      * @param dz_size Deadzone size in normalized units.
+     * @param geometry Geometry policy applied after deadzone processing.
      * @return Configured Joystick2D.
      */
     template <typename ReadX = ArduinoAnalogRead, typename ReadY = ArduinoAnalogRead,
@@ -224,13 +220,15 @@ namespace PotIO
     inline Joystick2D<ReadX, ReadY, FX, FY, RX, RY, SX, SY, ComputeMag, ComputeAngle>
     makeJoystickKY023(uint8_t pinX, uint8_t pinY,
                       Deadzone dz = Deadzone::RadialScaled,
-                      float dz_size = 0.12f)
+                      float dz_size = 0.12f,
+                      JoystickGeometry geometry = JoystickGeometry::Square)
     {
         typename Joystick2D<ReadX, ReadY, FX, FY, RX, RY, SX, SY, ComputeMag, ComputeAngle>::Config cfg;
         cfg.readX = ReadX(pinX);
         cfg.readY = ReadY(pinY);
         cfg.deadzone = dz;
         cfg.deadzone_size = dz_size;
+        cfg.geometry = geometry;
         return Joystick2D<ReadX, ReadY, FX, FY, RX, RY, SX, SY, ComputeMag, ComputeAngle>(cfg);
     }
 
@@ -241,7 +239,6 @@ namespace PotIO
      *
      * @tparam Steps Number of discrete steps.
      * @tparam Filter Filter type applied before quantization.
-     *
      * @param pin ADC pin.
      * @param c Min/center/max calibration in raw ADC units.
      * @param atten_db ESP32 attenuation in dB (0/3/6/11). Ignored on non-ESP32.

@@ -1,100 +1,46 @@
 {
   "name": "PotIO",
-  "version": "1.0.0",
-  "description": "Practical zero-allocation potentiometer and joystick input handling for Arduino projects, with calibration, deadzones, smoothing, shaping, slew limiting, stepped controls, and SnapshotBus-friendly frames.",
-  "keywords": [
-    "adc",
-    "analog",
-    "deadzone",
-    "deadzones",
-    "ema",
-    "esp32",
-    "filter",
-    "input",
-    "joystick",
-    "potentiometer",
-    "shaping",
-    "slew",
-    "snapshotbus",
-    "stepped"
-  ],
+  "version": "1.1.0",
+  "description": "Reliable zero-allocation potentiometer and joystick inputs for Arduino projects, with explicit sample validity and errors, strict or permissive calibration, independent filtering/shaping/slew stages, timing-gap protection, joystick geometry policies, continuous-wrap plausibility checks, durable step-change sequencing, rolling jitter tools, and ESP32 ADC helpers.",
+  "keywords": "adc,analog,input,potentiometer,joystick,calibration,validity,deadzone,filter,ema,shaping,slew,continuous-pot,stepped-pot,esp32,esp32-s3,arduino",
+  "license": "MIT",
   "authors": [
     {
-      "name": "Little Man Builds",
+      "name": "Little Man Builds (Darren Osborne)",
       "email": "littlemanbuilds@gmail.com",
       "maintainer": true
     }
   ],
-  "homepage": "https://github.com/LittleManBuilds/PotIO",
+  "homepage": "https://github.com/littlemanbuilds/PotIO",
   "repository": {
     "type": "git",
-    "url": "https://github.com/littlemanbuilds/PotIO"
+    "url": "https://github.com/littlemanbuilds/PotIO.git"
   },
-  "frameworks": [
-    "arduino"
-  ],
+  "frameworks": "arduino",
   "platforms": [
     "atmelavr",
     "atmelmegaavr",
     "atmelsam",
     "espressif32",
     "espressif8266",
+    "raspberrypi",
     "ststm32",
-    "teensy",
-    "raspberrypi"
+    "teensy"
   ],
   "headers": [
     "PotIO.h"
   ],
-  "examples": [
-    "examples/01_LinearPot_Basic/01_LinearPot_Basic.ino",
-    "examples/02_Pot_Calibration/02_Pot_Calibration.ino",
-    "examples/03_ContinuousPot_Advanced/03_ContinuousPot_Advanced.ino",
-    "examples/04_Joystick2D_KY023/04_Joystick2D_KY023.ino",
-    "examples/05_ESP32_ADC/05_ESP32_ADC.ino",
-    "examples/06_Pot_Shaping/06_Pot_Shaping.ino",
-    "examples/07_Pot_Steering/07_Pot_Steering.ino",
-    "examples/08_SteppedPot_ModeKnob/08_SteppedPot_ModeKnob.ino"
-  ],
-  "export": {
-    "include": [
-      "src",
-      "examples",
-      "README.md",
-      "LICENSE",
-      "keywords.txt",
-      ".gitignore",
-      "library.json",
-      "library.properties",
-      "platformio.ini",
-      "platformio.ci.ini"
-    ],
-    "exclude": [
-      "src/main.cpp",
-      ".DS_Store",
-      "**/.DS_Store",
-      "._*",
-      "**/._*",
-      "__MACOSX",
-      "__MACOSX/**",
-      "*.zip",
-      "**/*.zip",
-      "*.o",
-      "*.elf",
-      "*.bin",
-      "*.map",
-      "compile_commands.json",
-      ".pio",
-      ".pio/**",
-      ".vscode",
-      ".vscode/**",
-      "include",
-      "include/**",
-      "lib",
-      "lib/**",
-      "test",
-      "test/**"
-    ]
+  "build": {
+    "includeDir": "src"
   },
-  "license": "MIT"
+  "examples": [
+    "examples/01_LinearPotBasic/01_LinearPotBasic.ino",
+    "examples/02_PotCalibration/02_PotCalibration.ino",
+    "examples/03_ContinuousPotAdvanced/03_ContinuousPotAdvanced.ino",
+    "examples/04_Joystick2DKY023/04_Joystick2DKY023.ino",
+    "examples/05_ESP32ADC/05_ESP32ADC.ino",
+    "examples/06_PotShaping/06_PotShaping.ino",
+    "examples/07_PotSteering/07_PotSteering.ino",
+    "examples/08_SteppedPotModeKnob/08_SteppedPotModeKnob.ino"
+  ]
 }

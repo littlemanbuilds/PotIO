@@ -13,12 +13,12 @@
 
 #include <stdint.h>
 
-#include <devices/PotIO_Joystick2D.h>
-#include <PotIO_Arduino.h>
-#include <PotIO_Filters.h>
-#include <PotIO_RateLimit.h>
-#include <PotIO_Shaping.h>
-#include <PotIO_Factory.h>
+#include "devices/PotIO_Joystick2D.h"
+#include "PotIO_Arduino.h"
+#include "PotIO_Filters.h"
+#include "PotIO_RateLimit.h"
+#include "PotIO_Shaping.h"
+#include "PotIO_Factory.h"
 
 namespace PotIO
 {
@@ -102,6 +102,15 @@ namespace PotIO
          * @return Angle in radians.
          */
         POTIO_NODISCARD float angle() const noexcept { return joy.state().angle; }
+
+        /** @brief True when the latest joystick update produced fresh valid data. */
+        POTIO_NODISCARD bool valid() const noexcept { return joy.valid(); }
+
+        /** @brief True when angle() is meaningful rather than neutral. */
+        POTIO_NODISCARD bool angleValid() const noexcept { return joy.angleValid(); }
+
+        /** @brief Get the complete latest joystick state and status. */
+        POTIO_NODISCARD const typename Joy::State &state() const noexcept { return joy.state(); }
     };
 
 } ///< namespace PotIO

@@ -1,7 +1,7 @@
 /**
  * MIT License
  *
- * @brief Nonlinear shaping (response curves) for joystick/pot signals.
+ * @brief Nonlinear response shaping for normalized PotIO signals.
  *
  * @file PotIO_Shaping.h
  * @author Little Man Builds (Darren Osborne)
@@ -15,54 +15,57 @@
 
 namespace PotIO
 {
-    /**
-     * @brief Identity (no shaping).
-     */
+    /** @brief Identity response curve. */
     struct ShapeIdentity
     {
         /**
-         * @brief Apply shaping to input.
-         * @param x Input in [-1,1].
-         * @return float Output in [-1,1] (unchanged).
-         */
+ * @brief Validate configuration.
+ *
+ * @return Always true.
+ */
+        bool valid() const noexcept { return true; }
+
+        /** @brief Apply identity shaping. */
         float operator()(float x) const noexcept { return x; }
     };
 
-    /**
-     * @brief Cubic/expo blend: x * (a + (1-a) * x^2), a ∈ [0,1].
-     */
+    /** @brief Cubic/expo blend: x * (a + (1-a) * x²). */
     struct ShapeCubicExpo
     {
-        float a{0.7f}; ///< Blend factor (0..1). 0=cubic, 1=linear.
+        float a{0.7f}; ///< Blend factor in [0,1]. 0=cubic, 1=linear.
 
-        /**
-         * @brief Apply cubic/expo shaping.
-         * @param x Input in [-1,1].
-         * @return float Output in [-1,1].
-         */
+        /** @brief Validate the blend factor. */
+        bool valid() const noexcept
+        {
+            return isfinite(a) != 0 && a >= 0.0f && a <= 1.0f;
+        }
+
+        /** @brief Apply cubic/expo shaping. */
         float operator()(float x) const noexcept
         {
-            const float aa = (a < 0.f) ? 0.f : (a > 1.f ? 1.f : a);
-            return x * (aa + (1.f - aa) * x * x);
+            if (!valid())
+                return x;
+            return x * (a + (1.f - a) * x * x);
         }
     };
 
-    /**
-     * @brief Soft dead zone using normalized tanh.
-     */
+    /** @brief Normalized tanh response with a gentle center region. */
     struct ShapeSoftZone
     {
-        float k{3.0f}; ///< Gain; >= 1. Larger = snappier around zero.
+        float k{3.0f}; ///< Gain; must be finite and >= 1.
 
-        /**
-         * @brief Apply soft-zone shaping.
-         * @param x Input in [-1,1].
-         * @return float Output in [-1,1].
-         */
+        /** @brief Validate the configured gain. */
+        bool valid() const noexcept
+        {
+            return isfinite(k) != 0 && k >= 1.0f;
+        }
+
+        /** @brief Apply soft-zone shaping. */
         float operator()(float x) const noexcept
         {
-            const float kk = (k < 1.f) ? 1.f : k;
-            return tanh(kk * x) / tanh(kk);
+            if (!valid())
+                return x;
+            return tanh(k * x) / tanh(k);
         }
     };
 

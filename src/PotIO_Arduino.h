@@ -13,7 +13,7 @@
 
 #include <stdint.h>
 
-#include <PotIO_Compatibility.h>
+#include "PotIO_Compatibility.h"
 
 #if defined(ARDUINO_ARCH_ESP32)
 #include <esp32-hal-adc.h>
@@ -49,7 +49,7 @@ namespace PotIO
         int operator()() const noexcept
         {
 #if defined(ARDUINO)
-            return ::analogRead(pin);
+            return static_cast<int>(::analogRead(pin));
 #else
             return 0;
 #endif
@@ -84,7 +84,7 @@ namespace PotIO
          */
         int operator()() const noexcept
         {
-            return ::analogReadMilliVolts(pin);
+            return static_cast<int>(::analogReadMilliVolts(pin));
         }
     };
 #endif
@@ -97,22 +97,13 @@ namespace PotIO
     inline void setEsp32PinAttenuation(uint8_t pin, int attn_db) noexcept
     {
 #if defined(ARDUINO_ARCH_ESP32)
-#ifndef ADC_0db
-#define ADC_0db ((adc_attenuation_t)0)
-#endif
-#ifndef ADC_2_5db
-#define ADC_2_5db ((adc_attenuation_t)1)
-#endif
-#ifndef ADC_6db
-#define ADC_6db ((adc_attenuation_t)2)
-#endif
-#ifndef ADC_11db
-#define ADC_11db ((adc_attenuation_t)3)
-#endif
-        const adc_attenuation_t attn =
-            (attn_db >= 11) ? ADC_11db : (attn_db >= 6) ? ADC_6db
-                                 : (attn_db >= 3)   ? ADC_2_5db
-                                                    : ADC_0db;
+        adc_attenuation_t attn = ADC_0db;
+        if (attn_db >= 11)
+            attn = ADC_11db;
+        else if (attn_db >= 6)
+            attn = ADC_6db;
+        else if (attn_db >= 3)
+            attn = ADC_2_5db;
 
         ::analogSetPinAttenuation(pin, attn);
 #else

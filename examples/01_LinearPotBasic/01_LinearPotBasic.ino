@@ -1,6 +1,11 @@
 /**
- * @file 01_LinearPot_Basic.ino
+ * MIT License
+ *
+ * @file 01_LinearPotBasic.ino
  * @brief Read one potentiometer and print beginner-friendly normalized values.
+ * @author Little Man Builds (Darren Osborne)
+ * @date 2026-06-02
+ * @copyright Copyright © 2026 Little Man Builds
  *
  * This is the "hello world" example for PotIO. The important idea is that the
  * library turns a noisy board-specific ADC count into values that are easier to
@@ -13,8 +18,8 @@
  * is a throttle, trim knob, steering input, menu control, or something else.
  */
 
-#include <Arduino.h>
 #include <PotIO.h>
+#include <Arduino.h>
 
 // Little Man Builds projects currently develop on the ESP32-S3 DevKitC-1.
 // GPIO4 is used here because it is a simple ADC-capable example pin on
@@ -48,6 +53,12 @@ void loop()
     pot.update();
 
     const auto s = pot.state();
+    if (!s.status.valid)
+    {
+        Serial.println("sample invalid - holding the last good output");
+        delay(20);
+        return;
+    }
 
     Serial.print("raw01=");
     Serial.print(s.raw01, 3);

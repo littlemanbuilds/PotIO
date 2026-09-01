@@ -1,6 +1,11 @@
 /**
- * @file 06_Pot_Shaping.ino
+ * MIT License
+ *
+ * @file 06_PotShaping.ino
  * @brief Compare two response curves for analog controls.
+ * @author Little Man Builds (Darren Osborne)
+ * @date 2026-06-02
+ * @copyright Copyright © 2026 Little Man Builds
  *
  * Shaping changes the feel of a control after it has been calibrated and
  * centered. It is useful when you want finer control near center without losing
@@ -11,8 +16,9 @@
  * pin constants to the same ADC pin.
  */
 
-#include <Arduino.h>
 #include <PotIO.h>
+
+#include <Arduino.h>
 
 #if defined(ARDUINO_ARCH_ESP32)
 // GPIO4/GPIO5 are used here because they are simple ADC-capable example pins
@@ -90,6 +96,13 @@ void loop()
 {
     potExpo.update();
     potSoft.update();
+
+    if (!potExpo.valid() || !potSoft.valid())
+    {
+        Serial.println("sample invalid - holding the last good output");
+        delay(20);
+        return;
+    }
 
     Serial.print("expo_centered=");
     Serial.print(potExpo.centered(), 3);

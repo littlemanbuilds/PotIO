@@ -1,14 +1,20 @@
 /**
- * @file 04_Joystick2D_KY023.ino
+ * MIT License
+ *
+ * @file 04_Joystick2DKY023.ino
  * @brief Read a KY-023 style analog joystick with a radial scaled deadzone.
+ * @author Little Man Builds (Darren Osborne)
+ * @date 2026-06-02
+ * @copyright Copyright © 2026 Little Man Builds
  *
  * A joystick is just two analog inputs that share one idea of "center". PotIO
  * reads both axes, applies calibration, removes the small wobbly zone around
  * center, and reports x/y values that are easier for a control layer to use.
  */
 
-#include <Arduino.h>
 #include <PotIO.h>
+
+#include <Arduino.h>
 
 #if defined(ARDUINO_ARCH_ESP32)
 // GPIO4/GPIO5 are used here because they are simple ADC-capable example pins
@@ -45,6 +51,13 @@ void loop()
     joystick.update();
 
     const auto s = joystick.state();
+    if (!s.status.valid)
+    {
+        Serial.println("joystick sample invalid - holding the last good output");
+        delay(20);
+        return;
+    }
+
     Serial.print("x=");
     Serial.print(s.x, 3);
     Serial.print("  y=");
@@ -52,7 +65,10 @@ void loop()
     Serial.print("  mag=");
     Serial.print(s.mag, 3);
     Serial.print("  angle_deg=");
-    Serial.println(joystick.angleDeg(), 1);
+    if (joystick.angleValid())
+        Serial.println(joystick.angleDeg(), 1);
+    else
+        Serial.println("n/a");
 
     delay(20);
 }

@@ -1,6 +1,11 @@
 /**
- * @file 07_Pot_Steering.ino
+ * MIT License
+ *
+ * @file 07_PotSteering.ino
  * @brief Use a potentiometer as steering-style normalized input.
+ * @author Little Man Builds (Darren Osborne)
+ * @date 2026-06-02
+ * @copyright Copyright © 2026 Little Man Builds
  *
  * This example is about input interpretation, not motor control. PotIO reads a
  * steering-style pot and gives a clean centered value:
@@ -13,8 +18,9 @@
  * what to do with that input.
  */
 
-#include <Arduino.h>
 #include <PotIO.h>
+
+#include <Arduino.h>
 
 #if defined(ARDUINO_ARCH_ESP32)
 // GPIO4 is used here because it is a simple ADC-capable example pin on
@@ -40,9 +46,9 @@ static SteeringPot makeSteeringPot()
     typename SteeringPot::Config cfg;
     cfg.reader = PotIO::ArduinoAnalogRead(kPotPin);
 
-    // Replace this with values from 02_Pot_Calibration for your own hardware.
-    // The example constants are board-family friendly guesses, not magic
-    // steering numbers.
+    // Replace this with values from 02_PotCalibration for your own hardware.
+    // The example constants are board-family friendly guesses, not exact
+    // steering values.
     cfg.calib = kExampleSteeringCalib;
 
     // A little smoothing removes ADC twitch without hiding the live input.
@@ -78,10 +84,16 @@ void loop()
 {
     steering.update();
     const auto s = steering.state();
+    if (!s.status.valid)
+    {
+        Serial.println("sample invalid - holding the last steering input");
+        delay(20);
+        return;
+    }
 
     // JitterStats watches the raw ADC movement and helps estimate a sensible
     // deadzone. It is a measuring aid, not an automatic tuning system.
-    const uint16_t rawCounts = static_cast<uint16_t>((s.raw01 * steering.fullScale()) + 0.5f);
+    const uint16_t rawCounts = static_cast<uint16_t>((s.raw01 * static_cast<float>(steering.fullScale())) + 0.5f);
     jitter.observe(rawCounts);
 
     const float suggestedDeadzone =

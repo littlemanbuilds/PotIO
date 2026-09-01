@@ -1,7 +1,7 @@
 /**
  * MIT License
  *
- * @brief Simple filter primitives for PotIO.
+ * @brief Small, allocation-free filter primitives for PotIO.
  *
  * @file PotIO_Filters.h
  * @author Little Man Builds (Darren Osborne)
@@ -11,19 +11,21 @@
 
 #pragma once
 
+#include <math.h>
+
 namespace PotIO
 {
-    /**
-     * @brief No-op filter; returns the sample unchanged.
-     */
+    /** @brief No-op filter; returns the sample unchanged. */
     struct NoFilter
     {
         /**
-         * @brief Apply the filter to a sample.
-         * @param prev Previous filtered value.
-         * @param sample New input sample.
-         * @return float Filtered output (equal to `sample`).
-         */
+ * @brief Validate configuration.
+ *
+ * @return Always true.
+ */
+        bool valid() const noexcept { return true; }
+
+        /** @brief Apply the filter. */
         float operator()(float prev, float sample) const noexcept
         {
             (void)prev;
@@ -31,27 +33,23 @@ namespace PotIO
         }
     };
 
-    /**
-     * @brief Exponential moving average filter.
-     */
+    /** @brief Exponential moving average filter. */
     struct EMAFilter
     {
-        float alpha{0.1f}; ///< Smoothing factor in (0,1]. Lower is smoother.
+        float alpha{0.1f}; ///< Smoothing factor in [0,1]. Lower is smoother.
 
-        /**
-         * @brief Apply EMA to the input.
-         * @param prev Previous filtered value.
-         * @param sample New input sample.
-         * @return float Filtered output.
-         */
+        /** @brief Validate the configured smoothing factor. */
+        bool valid() const noexcept
+        {
+            return isfinite(alpha) != 0 && alpha >= 0.0f && alpha <= 1.0f;
+        }
+
+        /** @brief Apply EMA to the input. */
         float operator()(float prev, float sample) const noexcept
         {
-            float a = alpha;
-            if (a < 0.0f)
-                a = 0.0f;
-            if (a > 1.0f)
-                a = 1.0f;
-            return prev + a * (sample - prev);
+            if (!valid())
+                return prev;
+            return prev + alpha * (sample - prev);
         }
     };
 

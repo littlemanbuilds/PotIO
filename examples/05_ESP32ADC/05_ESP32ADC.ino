@@ -1,14 +1,20 @@
 /**
- * @file 05_ESP32_ADC.ino
+ * MIT License
+ *
+ * @file 05_ESP32ADC.ino
  * @brief ESP32-only ADC attenuation and millivolt-reader example.
+ * @author Little Man Builds (Darren Osborne)
+ * @date 2026-06-02
+ * @copyright Copyright © 2026 Little Man Builds
  *
  * This is intentionally more technical than the earlier examples. ESP32 ADCs
  * have attenuation and millivolt helpers that are not part of generic Arduino.
  * Keep those details here so the beginner examples stay clean.
  */
 
-#include <Arduino.h>
 #include <PotIO.h>
+
+#include <Arduino.h>
 
 #if !defined(ARDUINO_ARCH_ESP32)
 #error "This example is ESP32-only."
@@ -48,6 +54,15 @@ void loop()
 
     const auto raw = potRaw.state();
     const auto mv = potMv.state();
+    if (!raw.status.valid || !mv.status.valid)
+    {
+        Serial.print("sample invalid  raw_valid=");
+        Serial.print(raw.status.valid ? 1 : 0);
+        Serial.print("  mv_valid=");
+        Serial.println(mv.status.valid ? 1 : 0);
+        delay(20);
+        return;
+    }
 
     Serial.print("raw01=");
     Serial.print(raw.raw01, 3);

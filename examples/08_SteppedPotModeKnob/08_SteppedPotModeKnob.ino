@@ -1,6 +1,11 @@
 /**
- * @file 08_SteppedPot_ModeKnob.ino
+ * MIT License
+ *
+ * @file 08_SteppedPotModeKnob.ino
  * @brief Convert one potentiometer into a stable 5-position mode knob.
+ * @author Little Man Builds (Darren Osborne)
+ * @date 2026-06-02
+ * @copyright Copyright © 2026 Little Man Builds
  *
  * SteppedPot is useful when a cheap analog pot should behave like a selector:
  * Eco / Normal / Sport, menu pages, brightness presets, tuning profiles, etc.
@@ -9,8 +14,9 @@
  * boundary between two steps.
  */
 
-#include <Arduino.h>
 #include <PotIO.h>
+
+#include <Arduino.h>
 
 #if defined(ARDUINO_ARCH_ESP32)
 // GPIO4 is used here because it is a simple ADC-capable example pin on
@@ -57,6 +63,13 @@ void loop()
     modeKnob.update();
 
     const auto s = modeKnob.state();
+    if (!s.status.valid)
+    {
+        Serial.println("sample invalid - holding the last mode");
+        delay(20);
+        return;
+    }
+
     if (s.changed)
     {
         Serial.print("mode=");

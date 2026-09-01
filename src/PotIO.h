@@ -11,25 +11,27 @@
 
 #pragma once
 
-#include <PotIO_Compatibility.h>
-#include <PotIO_Types.h>
-#include <PotIO_Filters.h>
-#include <PotIO_RateLimit.h>
-#include <PotIO_Shaping.h>
-#include <PotIO_JitterTools.h>
+// ---- Version, contracts, and common policies ---- //
 
-// Platform adapters (optional).
-#include <PotIO_Arduino.h>
+#include "PotIO_Compatibility.h"
+#include "PotIO_Types.h"
+#include "PotIO_Filters.h"
+#include "PotIO_RateLimit.h"
+#include "PotIO_Shaping.h"
+#include "PotIO_JitterTools.h"
 
-// Devices.
-#include <devices/PotIO_LinearPot.h>
-#include <devices/PotIO_ContinuousPot.h>
-#include <devices/PotIO_Joystick2D.h>
-#include <devices/PotIO_SteppedPot.h>
+// ---- Platform adapters (optional) ---- //
+#include "PotIO_Arduino.h"
 
-// Helpers & presets.
-#include <devices/helpers/PotIO_ContinuousPotHelpers.h>
-#include <devices/helpers/PotIO_AnalogStick.h>
+// ---- Devices ---- //
+#include "devices/PotIO_LinearPot.h"
+#include "devices/PotIO_ContinuousPot.h"
+#include "devices/PotIO_Joystick2D.h"
+#include "devices/PotIO_SteppedPot.h"
 
-// Factories.
-#include <PotIO_Factory.h>
+// ---- Helpers and presets ---- //
+#include "devices/helpers/PotIO_ContinuousPotHelpers.h"
+#include "devices/helpers/PotIO_AnalogStick.h"
+
+// ---- Factories ---- //
+#include "PotIO_Factory.h"

@@ -20,9 +20,14 @@
 #include <Arduino.h>
 #endif
 
-// ---- Version macro ---- //
+// ---- Version macros ---- //
 
-#define POTIO_VERSION "1.0.0"
+#define POTIO_VERSION "1.1.0"
+#define POTIO_VERSION_MAJOR 1
+#define POTIO_VERSION_MINOR 1
+#define POTIO_VERSION_PATCH 0
+
+// Package-specific version names intentionally avoid global macro collisions.
 
 // ---- Tunables ---- //
 //

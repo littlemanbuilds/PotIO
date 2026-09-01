@@ -1,6 +1,11 @@
 /**
- * @file 03_ContinuousPot_Advanced.ino
+ * MIT License
+ *
+ * @file 03_ContinuousPotAdvanced.ino
  * @brief Use a cyclic analog knob with phase, wrap tracking, and unwrapped angle.
+ * @author Little Man Builds (Darren Osborne)
+ * @date 2026-06-02
+ * @copyright Copyright © 2026 Little Man Builds
  *
  * ContinuousPot is for controls where crossing the 0/1 boundary should be
  * treated as moving into the next turn. It can feel like a jog wheel or rotary
@@ -8,8 +13,9 @@
  * endless unless the physical signal is cyclic.
  */
 
-#include <Arduino.h>
 #include <PotIO.h>
+
+#include <Arduino.h>
 
 #if defined(ARDUINO_ARCH_ESP32)
 // GPIO4 is used here because it is a simple ADC-capable example pin on
@@ -44,6 +50,20 @@ void loop()
 {
     knob.update();
     const auto s = knob.state();
+
+    if (!s.status.valid)
+    {
+        Serial.println("sample invalid - holding the last good output");
+
+        // A discontinuity means PotIO can no longer prove the turn count. This
+        // demo re-arms from the last known count; a real machine may need to
+        // re-home or restore a known reference instead.
+        if (s.status.error == PotIO::ReadError::Discontinuity)
+            knob.resynchronizeTurns(s.turns);
+
+        delay(20);
+        return;
+    }
 
     const int32_t turns = static_cast<int32_t>(knob.turns_raw());
     if (turns != lastTurns)

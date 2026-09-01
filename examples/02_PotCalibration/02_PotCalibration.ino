@@ -1,6 +1,11 @@
 /**
- * @file 02_Pot_Calibration.ino
+ * MIT License
+ *
+ * @file 02_PotCalibration.ino
  * @brief Measure real min, center, and max values for PotIO::PotCalib.
+ * @author Little Man Builds (Darren Osborne)
+ * @date 2026-06-02
+ * @copyright Copyright © 2026 Little Man Builds
  *
  * Real potentiometers rarely use the perfect full ADC range. The ends may stop
  * before 0 or before full scale, and the physical center may not be exactly the
@@ -13,8 +18,9 @@
  *   4. Copy the printed PotIO::PotCalib into your real sketch.
  */
 
-#include <Arduino.h>
 #include <PotIO.h>
+
+#include <Arduino.h>
 
 #if defined(ARDUINO_ARCH_ESP32)
 // GPIO4 is used here because it is a simple ADC-capable example pin on

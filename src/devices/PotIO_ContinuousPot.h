@@ -1,7 +1,7 @@
 /**
  * MIT License
  *
- * @brief Endless rotary potentiometer: phase, turns, and unwrapped angle with filtering/shaping.
+ * @brief Cyclic analog potentiometer with validated acquisition, wrap plausibility, and unwrapped angle tracking.
  *
  * @file PotIO_ContinuousPot.h
  * @author Little Man Builds (Darren Osborne)
@@ -14,28 +14,23 @@
 #include <stdint.h>
 #include <math.h>
 
-#include <PotIO_Detail.h>
-#include <PotIO_Filters.h>
-#include <PotIO_RateLimit.h>
-#include <PotIO_Shaping.h>
-#include <PotIO_Arduino.h>
+#include "PotIO_Detail.h"
+#include "PotIO_Filters.h"
+#include "PotIO_RateLimit.h"
+#include "PotIO_Shaping.h"
+#include "PotIO_Arduino.h"
 
 namespace PotIO
 {
     /**
-     * @brief Continuous (endless) potentiometer with wrap tracking and hysteresis.
+     * @brief Continuous analog control with phase, turn count, and unwrapped angle.
      *
      * @details
-     * The device maintains a signed turn counter by detecting when the phase crosses
-     * the 0/1 boundary. A hysteresis band prevents false wrap toggles due to jitter.
-     *
-     * This class is intentionally single-threaded: call update() from one context.
-     * For cross-task/cross-core consumers, publish a POD frame using SnapshotBus.
-     *
-     * @tparam Reader ADC reader functor (e.g., ArduinoAnalogRead). May define `static constexpr int kFullScale`.
-     * @tparam Filter Sample filter (e.g., EMAFilter).
-     * @tparam Rate Rate limiter (e.g., NoRateLimit or SlewRate).
-     * @tparam Shaper Response shaper (e.g., ShapeIdentity).
+     * Wrap tracking is trustworthy only while consecutive valid phase samples
+     * remain physically plausible and arrive quickly enough to rule out a hidden
+     * half-turn alias. Failed acquisitions do not advance the phase timestamp. A
+     * discontinuity invalidates turn tracking until the application explicitly
+     * calls resynchronizeTurns().
      */
     template <typename Reader = ArduinoAnalogRead,
               typename Filter = EMAFilter,
@@ -44,182 +39,196 @@ namespace PotIO
     class ContinuousPot
     {
     public:
-        /**
-         * @brief Configuration bundle for ContinuousPot.
-         */
+        /** @brief Configuration bundle for ContinuousPot. */
         struct Config
         {
-            Reader reader{};        ///< ADC reader functor.
-            PotCalib calib{};       ///< Calibration (min/center/max); if invalid -> raw normalization.
-            Filter filter{};        ///< Filter instance.
-            Rate rate{};            ///< Rate limiter instance.
-            Shaper shape{};         ///< Response shaper.
-            float wrap_hyst{0.05f}; ///< Hysteresis near 0/1 to avoid false wrap toggles (fraction of [0,1]).
+            Reader reader{};                                                            ///< ADC reader functor.
+            PotCalib calib{};                                                           ///< Min/center/max calibration.
+            CalibrationPolicy calibration_policy{CalibrationPolicy::PermissiveDefault}; ///< Calibration failure policy.
+            uint16_t min_calibration_span{1u};                                          ///< Minimum raw counts on each side of center.
+            Filter filter{};                                                            ///< Filter instance.
+            Rate rate{};                                                                ///< Rate limiter instance.
+            Shaper shape{};                                                             ///< Response shaper.
+            float wrap_hyst{0.05f};                                                     ///< Edge region used for wrap recognition [0,0.45].
+            float max_phase_delta{0.45f};                                               ///< Maximum plausible shortest phase delta per sample.
+            float max_turns_per_s{8.0f};                                                ///< Maximum plausible velocity; also bounds the unambiguous sample interval.
+            float max_dt_s{0.5f};                                                       ///< Largest accepted processing gap in seconds.
+            InvalidSamplePolicy invalid_sample_policy{InvalidSamplePolicy::HoldState};  ///< Filter/rate recovery policy.
         };
 
-        /**
-         * @brief Public state produced by update().
-         */
+        /** @brief Public state produced by update(). */
         struct State
         {
-            uint16_t raw{0};       ///< Raw ADC sample in native units.
-            float phase01{0.f};    ///< Normalized phase in [0,1).
-            float centered{0.f};   ///< Centered [-1,1] after shaping/filter/rate.
-            int32_t turns{0};      ///< Signed full turns accumulated since start.
-            uint32_t t_ms{0};      ///< Timestamp in milliseconds.
+            uint16_t raw{0};         ///< Latest retained raw ADC sample.
+            float phase01{0.f};      ///< Latest retained normalized phase in [0,1].
+            float centered{0.f};     ///< Latest retained final centered output in [-1,1].
+            int32_t turns{0};        ///< Signed full turns accumulated since synchronization.
+            bool turns_valid{false}; ///< True while wrap tracking remains unambiguous.
+            uint32_t t_ms{0};        ///< Timestamp of the latest update attempt.
+            SampleStatus status{};   ///< Validity, sample timestamp, sequence, and quality.
         };
 
-        /**
-         * @brief POD snapshot suitable for publishing via SnapshotBus.
-         */
-        using Frame = State;
+        using Frame = State; ///< POD-style latest-state frame.
 
         ContinuousPot() = default;
 
-        /**
-         * @brief Construct with configuration.
-         * @param c Configuration bundle.
-         */
+        /** @brief Construct with configuration. */
         explicit ContinuousPot(const Config &c) : cfg_(c) { precompute_(); }
 
-        /**
-         * @brief Inject a custom time source (milliseconds). Pass nullptr to revert to default (Arduino::millis()).
-         * @param fn Optional function returning current milliseconds.
-         */
+        /** @brief Inject a custom millisecond time source. */
         void setTimeSource(TimeFn fn) noexcept { time_fn_ = fn; }
 
-        /**
-         * @brief Update using internal time source (no arguments).
-         */
+        /** @brief Update using the configured/default time source. */
         void update() noexcept { update(detail::time_now_ms(time_fn_)); }
 
-        /**
-         * @brief Update using external timestamp; dt computed internally (wrap-safe).
-         * @param now_ms Current timestamp in milliseconds.
-         */
-        void update(uint32_t now_ms) noexcept
-        {
-            const float dt_s = dt_.step(now_ms);
-            update(now_ms, dt_s);
-        }
+        /** @brief Update using an external timestamp with wrap-safe internal dt. */
+        void update(uint32_t now_ms) noexcept { update(now_ms, dt_.step(now_ms)); }
 
-        /**
-         * @brief Update using explicit time step.
-         * @param now_ms Current timestamp in milliseconds.
-         * @param dt_s Elapsed time in seconds for filters and rate limits.
-         */
+        /** @brief Acquire and process one cyclic analog sample. */
         void update(uint32_t now_ms, float dt_s) noexcept
         {
-            // 1) Raw read and clamp to ADC full scale.
-            const int raw_i = detail::clamp_raw(cfg_.reader(), fs_);
-            const float norm01 = detail::map_raw_to_01(raw_i, cfg_.calib, fs_);
-
-            // 2) Accumulate wraps into signed turns.
-            accumulate_wrap_(norm01);
-
-            // 3) Center -> shape -> filter -> rate.
-            float ctr = detail::to_centered(norm01);
-            ctr = cfg_.shape(ctr);
-            if (has_sample_)
-            {
-                ctr = cfg_.filter(st_.centered, ctr);
-                ctr = cfg_.rate(st_.centered, ctr, dt_s);
-            }
-            else
-            {
-                // First sample seeds the shaped output; wrap tracking is seeded separately.
-                has_sample_ = true;
-            }
-            ctr = clamp11(ctr);
-
-            // 4) Publish.
-            st_.raw = static_cast<uint16_t>(raw_i);
-            st_.phase01 = norm01;
-            st_.centered = ctr;
-            st_.turns = turns_;
             st_.t_ms = now_ms;
+
+            const bool calibration_ok = detail::calibration_valid(cfg_.calib, fs_, cfg_.min_calibration_span);
+            const uint16_t quality = calibration_ok ? QualityNone : QualityCalibrationFallback;
+
+            const ReadError config_error = validate_config_();
+            if (config_error != ReadError::None)
+            {
+                fail_(config_error, calibration_ok, quality);
+                return;
+            }
+            if (!calibration_ok && cfg_.calibration_policy == CalibrationPolicy::RequireValid)
+            {
+                fail_(ReadError::CalibrationInvalid, false, QualityNone);
+                return;
+            }
+
+            const ReadError timing_error = detail::validate_dt(dt_s, cfg_.max_dt_s);
+            if (timing_error != ReadError::None)
+            {
+                fail_(timing_error, calibration_ok, quality);
+                return;
+            }
+
+            const RawSample sample = detail::acquire(cfg_.reader, fs_);
+            if (!sample.valid)
+            {
+                fail_(sample.error, calibration_ok, quality);
+                return;
+            }
+
+            const float phase = detail::map_raw_to_01(sample.raw, cfg_.calib, fs_, calibration_ok);
+            if (!wrap_sample_plausible_(phase, now_ms))
+            {
+                turns_valid_ = false;
+                st_.turns_valid = false;
+                fail_(ReadError::Discontinuity, calibration_ok, quality);
+                return;
+            }
+
+            accumulate_wrap_(phase, now_ms);
+
+            const float shaped = cfg_.shape(detail::to_centered(phase));
+            if (!detail::finite_float(shaped))
+            {
+                fail_(ReadError::InvalidConfiguration, calibration_ok, quality);
+                return;
+            }
+
+            float filtered = shaped;
+            float output = shaped;
+            if (has_processing_sample_)
+            {
+                filtered = cfg_.filter(filtered_centered_, shaped);
+                if (!detail::finite_float(filtered))
+                {
+                    fail_(ReadError::InvalidConfiguration, calibration_ok, quality);
+                    return;
+                }
+                output = cfg_.rate(st_.centered, filtered, dt_s);
+                if (!detail::finite_float(output))
+                {
+                    fail_(ReadError::InvalidConfiguration, calibration_ok, quality);
+                    return;
+                }
+            }
+
+            filtered_centered_ = clamp11(filtered);
+            has_processing_sample_ = true;
+
+            st_.raw = static_cast<uint16_t>(sample.raw);
+            st_.phase01 = clamp01(phase);
+            st_.centered = clamp11(output);
+            st_.turns = turns_;
+            st_.turns_valid = turns_valid_;
+            detail::mark_success(st_.status, now_ms, calibration_ok, quality);
         }
 
-        /**
-         * @brief Get a const reference to the latest state.
-         * @return Latest state storage owned by this object.
-         */
+        /** @brief Get the latest state. */
         POTIO_NODISCARD const State &state() const noexcept { return st_; }
 
-        /**
-         * @brief Get a POD frame copy for latest-state publishing.
-         * @return Copy of the latest state.
-         */
+        /** @brief Get a copy of the latest state. */
         POTIO_NODISCARD Frame frame() const noexcept { return st_; }
 
-        /**
-         * @brief Total turns since start (can be negative).
-         * @return Signed full turns accumulated since reset/start.
-         */
+        /** @brief True when the latest update produced fresh valid data. */
+        POTIO_NODISCARD bool valid() const noexcept { return st_.status.valid; }
+
+        /** @brief True when the accumulated turn count is unambiguous. */
+        POTIO_NODISCARD bool turnsValid() const noexcept { return st_.turns_valid; }
+
+        /** @brief Total retained turns since synchronization. */
         POTIO_NODISCARD float turns_raw() const noexcept { return static_cast<float>(turns_); }
 
-        /**
-         * @brief Unwrapped angle in degrees: (turns + phase01) * 360.
-         * @return Unwrapped angle in degrees.
-         */
-        POTIO_NODISCARD float degrees_raw() const noexcept { return (static_cast<float>(turns_) + st_.phase01) * 360.0f; }
+        /** @brief Unwrapped angle in degrees. */
+        POTIO_NODISCARD float degrees_raw() const noexcept
+        {
+            return (static_cast<float>(turns_) + st_.phase01) * 360.0f;
+        }
 
-        /**
-         * @brief Current phase in [0,1).
-         * @return Latest normalized phase.
-         */
+        /** @brief Current normalized phase. */
         POTIO_NODISCARD float phase01() const noexcept { return st_.phase01; }
 
-        /**
-         * @brief Current phase mapped to radians in [-π, +π].
-         * @return Phase angle in radians.
-         */
+        /** @brief Current phase mapped to [-π,+π]. */
         POTIO_NODISCARD float phaseRad() const noexcept
         {
-            // Map 0..1 to -π..+π with 0.5 -> 0
             return (st_.phase01 * 2.0f - 1.0f) * kPi;
         }
 
-        /**
-         * @brief Current phase mapped to degrees in [-180, +180].
-         * @return Phase angle in degrees.
-         */
+        /** @brief Current phase mapped to [-180,+180] degrees. */
         POTIO_NODISCARD float phaseDeg() const noexcept { return rad2deg(phaseRad()); }
 
-        /**
-         * @brief Unwrapped angle in radians since start.
-         * @return Accumulated angle in radians.
-         */
+        /** @brief Unwrapped angle in radians. */
         POTIO_NODISCARD float angleUnwrappedRad() const noexcept
         {
             return (static_cast<float>(turns_) + st_.phase01) * (2.0f * kPi);
         }
 
-        /**
-         * @brief Unwrapped angle in degrees since start.
-         * @return Accumulated angle in degrees.
-         */
+        /** @brief Unwrapped angle in degrees. */
         POTIO_NODISCARD float angleUnwrappedDeg() const noexcept { return degrees_raw(); }
 
         /**
          * @brief Replace configuration.
-         *
          * @param c New configuration bundle.
-         * @param reset_state If true, clear turns, filter/rate history, timing, and wrap seed.
+         * @param reset_state Clear public state, turn count, and processing history.
          */
         void setConfig(const Config &c, bool reset_state = false) noexcept
         {
+            const bool calibration_changed = !detail::calib_equal(cfg_.calib, c.calib) ||
+                                             cfg_.calibration_policy != c.calibration_policy ||
+                                             cfg_.min_calibration_span != c.min_calibration_span;
             cfg_ = c;
             precompute_();
             if (reset_state)
                 resetState();
+            else if (calibration_changed)
+            {
+                reset_processing_();
+                resynchronizeTurns(turns_);
+            }
         }
 
-        /**
-         * @brief Reset accumulated turns to zero.
-         *
-         * @note The current phase remains unchanged; future wraps accumulate from zero.
-         */
+        /** @brief Reset accumulated turns to zero while retaining the current wrap phase. */
         void resetTurns() noexcept
         {
             turns_ = 0;
@@ -227,83 +236,152 @@ namespace PotIO
         }
 
         /**
-         * @brief Clear public state, accumulated turns, timing state, and wrap history.
+         * @brief Explicitly re-arm wrap tracking after a discontinuity.
+         * @param known_turns Turn count the application wants to use as the new reference.
+         *
+         * @details
+         * The next valid sample seeds phase tracking and cannot create a wrap.
          */
+        void resynchronizeTurns(int32_t known_turns = 0) noexcept
+        {
+            turns_ = known_turns;
+            st_.turns = known_turns;
+            turns_valid_ = false;
+            st_.turns_valid = false;
+            last_phase01_ = 0.f;
+            last_phase_ms_ = 0u;
+            has_last_phase_ = false;
+        }
+
+        /** @brief Clear public state, turn count, timing, and all processing history. */
         void resetState() noexcept
         {
             st_ = State{};
             dt_ = detail::DtState{};
-            last_phase01_ = 0.f;
             turns_ = 0;
-            has_sample_ = false;
+            turns_valid_ = false;
+            last_phase01_ = 0.f;
+            last_phase_ms_ = 0u;
             has_last_phase_ = false;
+            reset_processing_();
         }
 
-        /**
-         * @brief Get effective ADC full-scale (Reader::kFullScale or default).
-         * @return Full-scale value in raw reader units.
-         */
+        /** @brief Get effective reader full-scale. */
         POTIO_NODISCARD int fullScale() const noexcept { return fs_; }
 
     private:
-        /**
-         * @brief Precompute reader-dependent full-scale value.
-         */
         void precompute_() noexcept
         {
-            fs_ = detail::FullScale<Reader>::value;
-            if (fs_ <= 0)
-                fs_ = 1;
+            const int declared = detail::FullScale<Reader>::value;
+            full_scale_valid_ = declared > 0;
+            fs_ = full_scale_valid_ ? declared : 1;
         }
 
-        /**
-         * @brief Update turn counter when the phase wraps across 0/1 with hysteresis.
-         * @param phase01 Current normalized phase in [0,1].
-         * @note The first sample only seeds wrap tracking; it never creates a fake turn.
-         */
-        void accumulate_wrap_(float phase01) noexcept
+        ReadError validate_config_() const noexcept
         {
-            // Clamp hysteresis to [0, 0.45] to prevent overlap.
-            const float h = (cfg_.wrap_hyst < 0.f) ? 0.f : (cfg_.wrap_hyst > 0.45f ? 0.45f : cfg_.wrap_hyst);
+            if (!full_scale_valid_ || cfg_.min_calibration_span == 0u)
+                return ReadError::InvalidConfiguration;
+            if (!detail::valid_calibration_policy(cfg_.calibration_policy) ||
+                !detail::valid_invalid_sample_policy(cfg_.invalid_sample_policy))
+                return ReadError::InvalidConfiguration;
+            if (!detail::finite_float(cfg_.wrap_hyst) || cfg_.wrap_hyst < 0.f || cfg_.wrap_hyst > 0.45f)
+                return ReadError::InvalidConfiguration;
+            if (!detail::finite_float(cfg_.max_phase_delta) || cfg_.max_phase_delta <= 0.f || cfg_.max_phase_delta > 0.5f)
+                return ReadError::InvalidConfiguration;
+            if (!detail::finite_float(cfg_.max_turns_per_s) || cfg_.max_turns_per_s <= 0.f)
+                return ReadError::InvalidConfiguration;
+            if (!detail::finite_float(cfg_.max_dt_s) || cfg_.max_dt_s <= 0.f)
+                return ReadError::InvalidConfiguration;
+            if (!detail::policy_valid(cfg_.filter) || !detail::policy_valid(cfg_.rate) || !detail::policy_valid(cfg_.shape))
+                return ReadError::InvalidConfiguration;
+            return ReadError::None;
+        }
 
+        bool wrap_sample_plausible_(float phase, uint32_t now_ms) const noexcept
+        {
+            if (!has_last_phase_)
+                return true;
+            if (!turns_valid_)
+                return false;
+
+            float delta = phase - last_phase01_;
+            if (delta > 0.5f)
+                delta -= 1.0f;
+            else if (delta < -0.5f)
+                delta += 1.0f;
+
+            const float abs_delta = fabs(delta);
+            if (abs_delta > cfg_.max_phase_delta)
+                return false;
+
+            // Wrap tracking is only unique while the configured maximum speed
+            // cannot cover half a turn between two valid phase samples. Use the
+            // last successful phase timestamp so failed acquisitions cannot
+            // accidentally shorten this interval.
+            const uint32_t elapsed_ms = now_ms - last_phase_ms_;
+            const float elapsed_s = 0.001f * static_cast<float>(elapsed_ms);
+            if (elapsed_s > kEps)
+            {
+                if ((cfg_.max_turns_per_s * elapsed_s) >= 0.5f)
+                    return false;
+                if ((abs_delta / elapsed_s) > cfg_.max_turns_per_s)
+                    return false;
+            }
+            return true;
+        }
+
+        void accumulate_wrap_(float phase, uint32_t now_ms) noexcept
+        {
             if (!has_last_phase_)
             {
-                // Startup might begin near either end. Seed first, then compare real movement.
-                last_phase01_ = phase01;
+                last_phase01_ = phase;
+                last_phase_ms_ = now_ms;
                 has_last_phase_ = true;
+                turns_valid_ = true;
                 return;
             }
 
-            // Detect wrap based on "far end" regions:
-            // - low region  : [0, h]
-            // - high region : [1-h, 1]
-            //
-            // If we were in high and now in low => +1 turn (forward wrap).
-            // If we were in low and now in high => -1 turn (reverse wrap).
+            const float h = cfg_.wrap_hyst;
             const bool was_high = last_phase01_ > (1.f - h);
             const bool was_low = last_phase01_ < h;
-            const bool is_high = phase01 > (1.f - h);
-            const bool is_low = phase01 < h;
+            const bool is_high = phase > (1.f - h);
+            const bool is_low = phase < h;
 
             if (was_high && is_low)
                 ++turns_;
             else if (was_low && is_high)
                 --turns_;
 
-            last_phase01_ = phase01;
+            last_phase01_ = phase;
+            last_phase_ms_ = now_ms;
+        }
+
+        void fail_(ReadError error, bool calibration_ok, uint16_t quality) noexcept
+        {
+            detail::mark_failure(st_.status, error, calibration_ok, quality);
+            if (cfg_.invalid_sample_policy == InvalidSamplePolicy::ResetProcessing)
+                reset_processing_();
+        }
+
+        void reset_processing_() noexcept
+        {
+            filtered_centered_ = 0.f;
+            has_processing_sample_ = false;
         }
 
         Config cfg_{};
         State st_{};
         int fs_{POTIO_DEFAULT_FULLSCALE};
-
+        bool full_scale_valid_{true};
         TimeFn time_fn_{nullptr};
         detail::DtState dt_{};
-
+        float filtered_centered_{0.f};
         float last_phase01_{0.f};
+        uint32_t last_phase_ms_{0u};
         int32_t turns_{0};
-        bool has_sample_{false};
+        bool has_processing_sample_{false};
         bool has_last_phase_{false};
+        bool turns_valid_{false};
     };
 
 } ///< namespace PotIO

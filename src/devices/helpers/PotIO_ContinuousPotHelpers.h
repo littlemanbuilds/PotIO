@@ -13,11 +13,11 @@
 
 #include <stdint.h>
 
-#include <PotIO_Filters.h>
-#include <PotIO_Shaping.h>
-#include <PotIO_RateLimit.h>
-#include <devices/PotIO_ContinuousPot.h>
-#include <PotIO_Arduino.h>
+#include "PotIO_Filters.h"
+#include "PotIO_Shaping.h"
+#include "PotIO_RateLimit.h"
+#include "devices/PotIO_ContinuousPot.h"
+#include "PotIO_Arduino.h"
 
 namespace PotIO
 {
