@@ -26,14 +26,14 @@ using namespace PotIO;
 #if defined(ARDUINO_ARCH_ESP32)
 // GPIO4/GPIO5 are used here because they are simple ADC-capable example pins
 // on ESP32-S3 boards. If your board routes ADC differently, change these pins.
-static constexpr int kPinExpo = 4;
-static constexpr int kPinSoft = 5;
+const int kPinExpo = 4;
+const int kPinSoft = 5;
 #elif defined(ARDUINO_ARCH_ESP8266)
-static constexpr int kPinExpo = A0;
-static constexpr int kPinSoft = A0; // Compare two curves on the same ADC input.
+const int kPinExpo = A0;
+const int kPinSoft = A0; // Compare two curves on the same ADC input.
 #else
-static constexpr int kPinExpo = A0;
-static constexpr int kPinSoft = A1;
+const int kPinExpo = A0;
+const int kPinSoft = A1;
 #endif
 
 using ExpoPot = LinearPot<ArduinoAnalogRead,

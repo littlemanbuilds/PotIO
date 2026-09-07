@@ -59,6 +59,8 @@ namespace PotIO
             RateY ry{};                                                                 ///< Y rate limiter.
             ShapeX sx{};                                                                ///< X response shaper.
             ShapeY sy{};                                                                ///< Y response shaper.
+            RawBounds raw_bounds_x{}; ///< Optional inclusive X raw plausibility envelope.
+            RawBounds raw_bounds_y{}; ///< Optional inclusive Y raw plausibility envelope.
         };
 
         /** @brief Public state produced by update(). */
@@ -140,8 +142,8 @@ namespace PotIO
                 return;
             }
 
-            const RawSample sample_x = detail::acquire(cfg_.readX, fs_x_);
-            const RawSample sample_y = detail::acquire(cfg_.readY, fs_y_);
+            const RawSample sample_x = detail::acquire(cfg_.readX, fs_x_, cfg_.raw_bounds_x);
+            const RawSample sample_y = detail::acquire(cfg_.readY, fs_y_, cfg_.raw_bounds_y);
             if (!sample_x.valid || !sample_y.valid)
             {
                 fail_(!sample_x.valid ? sample_x.error : sample_y.error, calibration_ok, quality);
@@ -337,6 +339,9 @@ namespace PotIO
         {
             if (!full_scale_valid_ || cfg_.min_calibration_span == 0u)
                 return ReadError::InvalidConfiguration;
+            if (!detail::raw_bounds_valid(cfg_.raw_bounds_x, fs_x_, cfg_.calX, cfg_.min_calibration_span) ||
+                !detail::raw_bounds_valid(cfg_.raw_bounds_y, fs_y_, cfg_.calY, cfg_.min_calibration_span))
+                return ReadError::InvalidConfiguration;
             if (!detail::valid_calibration_policy(cfg_.calibration_policy) ||
                 !detail::valid_invalid_sample_policy(cfg_.invalid_sample_policy) ||
                 !detail::valid_deadzone(cfg_.deadzone) ||
@@ -480,8 +485,8 @@ namespace PotIO
 
         Config cfg_{};
         State st_{};
-        int fs_x_{POTIO_DEFAULT_FULLSCALE};
-        int fs_y_{POTIO_DEFAULT_FULLSCALE};
+        int fs_x_{1};
+        int fs_y_{1};
         bool full_scale_valid_{true};
         TimeFn time_fn_{nullptr};
         detail::DtState dt_{};

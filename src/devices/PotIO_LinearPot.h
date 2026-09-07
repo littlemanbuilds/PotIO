@@ -48,6 +48,7 @@ namespace PotIO
             Filter filter{};                                                            ///< Filter instance.
             Rate rate{};                                                                ///< Rate limiter instance.
             Shaper shape{};                                                             ///< Response shaper.
+            RawBounds raw_bounds{}; ///< Optional inclusive raw plausibility envelope.
         };
 
         /** @brief Public state produced by update(). */
@@ -124,7 +125,7 @@ namespace PotIO
                 return;
             }
 
-            const RawSample sample = detail::acquire(cfg_.reader, adc_full_scale_);
+            const RawSample sample = detail::acquire(cfg_.reader, adc_full_scale_, cfg_.raw_bounds);
             if (!sample.valid)
             {
                 fail_(sample.error, calibration_ok, quality);
@@ -263,6 +264,8 @@ namespace PotIO
         {
             if (!full_scale_valid_ || cfg_.min_calibration_span == 0u)
                 return ReadError::InvalidConfiguration;
+            if (!detail::raw_bounds_valid(cfg_.raw_bounds, adc_full_scale_, cfg_.calib, cfg_.min_calibration_span))
+                return ReadError::InvalidConfiguration;
             if (!detail::valid_calibration_policy(cfg_.calibration_policy) ||
                 !detail::valid_invalid_sample_policy(cfg_.invalid_sample_policy))
                 return ReadError::InvalidConfiguration;
@@ -300,8 +303,8 @@ namespace PotIO
         Config cfg_{}; ///< Active configuration.
         State st_{};   ///< Public state storage.
 
-        int adc_full_scale_{POTIO_DEFAULT_FULLSCALE};
-        float adc_full_scale_inv_{1.f / static_cast<float>(POTIO_DEFAULT_FULLSCALE)};
+        int adc_full_scale_{1};
+        float adc_full_scale_inv_{1.f};
         bool full_scale_valid_{true};
 
         TimeFn time_fn_{nullptr};

@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <cstring>
 #include <limits>
+#include <initializer_list>
 #include <type_traits>
 
 struct IntReader
@@ -60,9 +61,9 @@ static_assert(std::is_trivially_copyable<FrameStepped::State>::value, "SteppedPo
 static void test_version_macros()
 {
     MiniTest::begin("version macros expose PotIO package version");
-    CHECK(std::strcmp(POTIO_VERSION, "1.1.0") == 0);
+    CHECK(std::strcmp(POTIO_VERSION, "1.2.0") == 0);
     CHECK(POTIO_VERSION_MAJOR == 1);
-    CHECK(POTIO_VERSION_MINOR == 1);
+    CHECK(POTIO_VERSION_MINOR == 2);
     CHECK(POTIO_VERSION_PATCH == 0);
 }
 
@@ -168,7 +169,7 @@ template <int FullScale, int Sample>
 static void check_single_axis_readers(PotIO::ReadError expected)
 {
     using Reader = FixedRangeReader<FullScale, Sample>;
-    const int expectedScale = FullScale > 0 ? FullScale : 1;
+    const int expectedScale = FullScale > 0 && FullScale <= UINT16_MAX ? FullScale : 1;
     check_single_axis_construction<PotIO::LinearPot<Reader>>(expectedScale, expected);
     check_single_axis_construction<PotIO::ContinuousPot<Reader>>(expectedScale, expected);
     check_single_axis_construction<PotIO::SteppedPot<5u, Reader>>(expectedScale, expected);
@@ -181,8 +182,8 @@ static void check_joystick_construction(PotIO::ReadError expected)
     Joystick defaultDevice;
     const typename Joystick::Config cfg{};
     Joystick configuredDevice(cfg);
-    CHECK(defaultDevice.fullScaleX() == (ScaleX > 0 ? ScaleX : 1));
-    CHECK(defaultDevice.fullScaleY() == (ScaleY > 0 ? ScaleY : 1));
+    CHECK(defaultDevice.fullScaleX() == (ScaleX > 0 && ScaleX <= UINT16_MAX ? ScaleX : 1));
+    CHECK(defaultDevice.fullScaleY() == (ScaleY > 0 && ScaleY <= UINT16_MAX ? ScaleY : 1));
     CHECK(configuredDevice.fullScaleX() == defaultDevice.fullScaleX());
     CHECK(configuredDevice.fullScaleY() == defaultDevice.fullScaleY());
     check_construction_validity(defaultDevice, configuredDevice, expected);
@@ -196,6 +197,10 @@ static void test_default_construction_reader_ranges()
     check_single_axis_readers<100, 101>(PotIO::ReadError::OutOfRange);
     check_single_axis_readers<0, 0>(PotIO::ReadError::InvalidConfiguration);
     check_single_axis_readers<-100, 0>(PotIO::ReadError::InvalidConfiguration);
+    check_single_axis_readers<65536, 0>(PotIO::ReadError::InvalidConfiguration);
+    check_single_axis_readers<65535, 65535>(PotIO::ReadError::None);
+    check_joystick_construction<65536, 0, 1023, 512>(PotIO::ReadError::InvalidConfiguration);
+    check_joystick_construction<1023, 512, 65536, 0>(PotIO::ReadError::InvalidConfiguration);
     // Distinct axis ranges detect accidental sharing or omission of either cache.
     check_joystick_construction<100, 50, 200, 100>(PotIO::ReadError::None);
     check_joystick_construction<100, 100, 200, 200>(PotIO::ReadError::None);
@@ -760,8 +765,319 @@ static void test_wrap_safe_dt()
     CHECK_NEAR(dt.step(0x00000010u), 0.032, 1e-6);
 }
 
+template <typename Device>
+static void check_raw_configuration()
+{
+    int raw = 512;
+    typename Device::Config cfg;
+    cfg.reader = IntReader(&raw);
+    cfg.calib = PotIO::PotCalib{200u, 512u, 800u};
+    const PotIO::RawBounds invalid[] = {{100u, 100u}, {900u, 100u}, {0u, 1024u},
+                                      {201u, 900u}, {100u, 799u}, {0u, 65536u}};
+    for (const auto &bounds : invalid)
+    {
+        cfg.raw_bounds = bounds;
+        Device pot(cfg);
+        pot.update(1u, 0.01f);
+        CHECK(pot.state().status.error == PotIO::ReadError::InvalidConfiguration);
+        CHECK(!pot.state().status.has_value);
+    }
+    cfg.raw_bounds = PotIO::RawBounds{0u, 1023u};
+    Device full(cfg);
+    full.update(1u, 0.01f);
+    CHECK(full.valid());
+    cfg.raw_bounds = PotIO::RawBounds{100u, 900u};
+    cfg.calib = PotIO::PotCalib{0u, 0u, 1023u}; // Invalid calibration must permit fallback.
+    Device fallback(cfg);
+    fallback.update(1u, 0.01f);
+    CHECK(fallback.valid());
+    CHECK(!fallback.state().status.calibration_valid);
+    cfg.raw_bounds = PotIO::RawBounds{65536u, 0u};
+    cfg.raw_bounds.enabled = false;
+    Device disabled(cfg);
+    disabled.update(1u, 0.01f);
+    CHECK(disabled.valid());
+}
+
+template <typename Device>
+static void check_raw_sample_boundary()
+{
+    int raw = 99;
+    typename Device::Config cfg;
+    cfg.reader = IntReader(&raw);
+    cfg.calib = PotIO::PotCalib{200u, 512u, 800u};
+    CHECK(!cfg.raw_bounds.enabled);
+    cfg.raw_bounds = PotIO::RawBounds{100u, 900u};
+    Device pot(cfg);
+    pot.update(1u, 0.01f);
+    CHECK(pot.state().status.error == PotIO::ReadError::ImplausibleSample);
+    CHECK(!pot.state().status.has_value);
+    // Independent seeds also exercise ContinuousPot endpoints without a phase jump.
+    for (int endpoint : {100, 900})
+    {
+        raw = endpoint;
+        pot.resetState();
+        pot.update(10u, 0.01f);
+        CHECK(pot.valid());
+        raw = endpoint == 100 ? 99 : 901;
+        pot.update(20u, 0.01f);
+        CHECK(!pot.valid());
+        CHECK(pot.state().status.error == PotIO::ReadError::ImplausibleSample);
+        CHECK(pot.state().status.sequence == 1u);
+        CHECK(pot.state().status.sample_ms == 10u);
+        raw = endpoint;
+        pot.update(30u, 0.01f);
+        CHECK(pot.valid());
+        CHECK(pot.state().status.sequence == 2u);
+        CHECK(pot.state().status.sample_ms == 30u);
+    }
+    raw = 1024;
+    pot.update(40u, 0.01f);
+    CHECK(pot.state().status.error == PotIO::ReadError::OutOfRange);
+    raw = -1;
+    pot.update(50u, 0.01f);
+    CHECK(pot.state().status.error == PotIO::ReadError::ReaderFailure);
+}
+
+struct WideRangeReader
+{
+    static constexpr uint64_t kFullScale = UINT64_C(4294968319); // Would narrow to 1023 on a 32-bit int.
+    int operator()() const noexcept { return 512; }
+};
+
+static void test_raw_bounds_contract()
+{
+    MiniTest::begin("raw bounds configuration, inclusive endpoints and representational limits");
+    static_assert(static_cast<int>(PotIO::ReadError::Discontinuity) == 8, "Existing error values remain stable");
+    static_assert(static_cast<int>(PotIO::ReadError::ImplausibleSample) == 9, "New error is appended");
+    check_raw_configuration<FrameLinear>();
+    check_raw_configuration<FrameContinuous>();
+    check_raw_configuration<FrameStepped>();
+    check_raw_sample_boundary<FrameLinear>();
+    check_raw_sample_boundary<FrameContinuous>();
+    check_raw_sample_boundary<FrameStepped>();
+    check_single_axis_construction<PotIO::LinearPot<WideRangeReader>>(1, PotIO::ReadError::InvalidConfiguration);
+    check_single_axis_construction<PotIO::ContinuousPot<WideRangeReader>>(1, PotIO::ReadError::InvalidConfiguration);
+    check_single_axis_construction<PotIO::SteppedPot<5u, WideRangeReader>>(1, PotIO::ReadError::InvalidConfiguration);
+    using Joy = PotIO::Joystick2D<WideRangeReader, WideRangeReader>;
+    Joy a;
+    Joy b(Joy::Config{});
+    check_construction_validity(a, b, PotIO::ReadError::InvalidConfiguration);
+
+    int raw = 0;
+    FrameLinear::Config cfg;
+    cfg.reader = IntReader(&raw);
+    cfg.calib = PotIO::PotCalib{200u, 512u, 800u};
+    FrameLinear unguarded(cfg);
+    unguarded.update(1u, 0.01f);
+    CHECK_NEAR(unguarded.centered(), -1.0, 1e-6);
+    raw = 1023;
+    unguarded.update(2u, 0.01f);
+    CHECK_NEAR(unguarded.centered(), 1.0, 1e-6);
+    CHECK(unguarded.valid());
+    cfg.raw_bounds = PotIO::RawBounds{100u, 900u};
+    FrameLinear guarded(cfg);
+    raw = 512;
+    guarded.update(10u, 0.01f);
+    for (int fault : {99, 901})
+    {
+        raw = fault;
+        guarded.update(20u, 0.01f);
+        CHECK(guarded.state().status.error == PotIO::ReadError::ImplausibleSample);
+        CHECK_NEAR(guarded.centered(), 0.0, 1e-6);
+        CHECK_NEAR(guarded.calib01(), 0.5, 1e-6);
+        CHECK(guarded.state().status.sample_ms == 10u);
+        CHECK(guarded.state().status.sequence == 1u);
+    }
+}
+
+static void test_linear_plausibility_history()
+{
+    MiniTest::begin("raw rejection preserves independent EMA and slew histories or explicitly reseeds");
+    using Pot = PotIO::LinearPot<IntReader, PotIO::EMAFilter, PotIO::SlewRate>;
+    for (auto policy : {PotIO::InvalidSamplePolicy::HoldState, PotIO::InvalidSamplePolicy::ResetProcessing})
+    {
+        int raw = 512;
+        Pot::Config cfg;
+        cfg.reader = IntReader(&raw);
+        cfg.calib = PotIO::PotCalib{200u, 512u, 800u};
+        cfg.raw_bounds = PotIO::RawBounds{100u, 900u};
+        cfg.filter.alpha = 0.5f;
+        cfg.rate.units_per_s = 1.f;
+        cfg.invalid_sample_policy = policy;
+        Pot pot(cfg);
+        pot.update(10u, 0.1f);
+        raw = 800;
+        pot.update(20u, 0.1f); // Filter = .5, slew output = .1.
+        CHECK_NEAR(pot.centered(), 0.1, 1e-6);
+        raw = 99;
+        pot.update(30u, 0.1f);
+        CHECK(!pot.valid());
+        CHECK_NEAR(pot.centered(), 0.1, 1e-6);
+        CHECK(pot.state().status.sample_ms == 20u);
+        raw = 512;
+        pot.update(40u, 0.1f); // Held filter = .25, slew = .2; reset seeds zero.
+        CHECK(pot.valid());
+        CHECK_NEAR(pot.centered(), policy == PotIO::InvalidSamplePolicy::HoldState ? 0.2 : 0.0, 1e-6);
+        pot.update(50u, 0.1f); // Expose filter history after slew catches up.
+        CHECK_NEAR(pot.centered(), policy == PotIO::InvalidSamplePolicy::HoldState ? 0.125 : 0.0, 1e-6);
+    }
+}
+
+static void test_joystick_raw_plausibility()
+{
+    MiniTest::begin("independent joystick bounds reject both axes atomically before EMA and slew");
+    using Joy = PotIO::Joystick2D<IntReader, IntReader, PotIO::EMAFilter, PotIO::EMAFilter,
+                                  PotIO::SlewRate, PotIO::SlewRate>;
+    int x = 512, y = 512;
+    Joy::Config cfg;
+    cfg.readX = IntReader(&x);
+    cfg.readY = IntReader(&y);
+    cfg.calX = PotIO::PotCalib{200u, 512u, 800u};
+    cfg.calY = cfg.calX;
+    CHECK(!cfg.raw_bounds_x.enabled && !cfg.raw_bounds_y.enabled);
+    cfg.raw_bounds_x = PotIO::RawBounds{100u, 900u};
+    cfg.raw_bounds_y = PotIO::RawBounds{150u, 850u};
+    cfg.deadzone = PotIO::Deadzone::None;
+    cfg.fx.alpha = cfg.fy.alpha = 0.5f;
+    cfg.rx.units_per_s = cfg.ry.units_per_s = 1.f;
+    Joy joy(cfg);
+    joy.update(10u, 0.1f);
+    x = y = 800;
+    joy.update(20u, 0.1f);
+    x = 99; y = 200;
+    joy.update(30u, 0.1f);
+    CHECK(joy.state().status.error == PotIO::ReadError::ImplausibleSample);
+    CHECK_NEAR(joy.x(), 0.1, 1e-6);
+    CHECK_NEAR(joy.y(), 0.1, 1e-6);
+    x = 200; y = 851;
+    joy.update(40u, 0.1f);
+    CHECK(joy.state().status.error == PotIO::ReadError::ImplausibleSample);
+    CHECK(joy.state().status.sequence == 2u);
+    CHECK(joy.state().status.sample_ms == 20u);
+    CHECK_NEAR(joy.x(), 0.1, 1e-6);
+    CHECK_NEAR(joy.y(), 0.1, 1e-6);
+    x = y = 512;
+    joy.update(50u, 0.1f);
+    CHECK(joy.valid());
+    CHECK_NEAR(joy.x(), 0.2, 1e-6);
+    CHECK_NEAR(joy.y(), 0.2, 1e-6);
+    joy.update(60u, 0.1f);
+    CHECK_NEAR(joy.x(), 0.125, 1e-6);
+    CHECK_NEAR(joy.y(), 0.125, 1e-6);
+    for (bool axisX : {true, false})
+    {
+        for (const auto &bounds : {PotIO::RawBounds{100u, 100u}, PotIO::RawBounds{900u, 100u},
+                                  PotIO::RawBounds{0u, 1024u}, PotIO::RawBounds{201u, 900u},
+                                  PotIO::RawBounds{100u, 799u}, PotIO::RawBounds{0u, 65536u}})
+        {
+            auto bad = cfg;
+            (axisX ? bad.raw_bounds_x : bad.raw_bounds_y) = bounds;
+            Joy invalid(bad);
+            invalid.update(1u, 0.01f);
+            CHECK(invalid.state().status.error == PotIO::ReadError::InvalidConfiguration);
+        }
+    }
+    for (int endpoint : {0, 1})
+    {
+        x = endpoint == 0 ? 100 : 900;
+        y = endpoint == 0 ? 150 : 850;
+        joy.resetState();
+        joy.update(1u, 0.01f);
+        CHECK(joy.valid());
+    }
+}
+
+static void test_continuous_raw_plausibility()
+{
+    MiniTest::begin("raw rejection neither seeds nor wraps nor shortens the last successful phase interval");
+    int raw = 0;
+    FrameContinuous::Config cfg;
+    cfg.reader = IntReader(&raw);
+    cfg.calib = PotIO::PotCalib{100u, 512u, 900u};
+    cfg.raw_bounds = PotIO::RawBounds{50u, 950u};
+    cfg.max_turns_per_s = 8.f;
+    FrameContinuous pot(cfg);
+    pot.update(980u, 0.02f);
+    CHECK(!pot.turnsValid());
+    CHECK(!pot.state().status.has_value);
+    raw = 890;
+    pot.update(1000u, 0.02f);
+    CHECK(pot.turnsValid());
+    const float retained = pot.state().centered;
+    raw = 0; // Would map to phase zero and create a wrap if admitted.
+    pot.update(1020u, 0.02f);
+    CHECK(pot.state().status.error == PotIO::ReadError::ImplausibleSample);
+    CHECK(pot.state().turns == 0);
+    CHECK(pot.turnsValid());
+    CHECK_NEAR(pot.state().centered, retained, 1e-6);
+    CHECK(pot.state().status.sample_ms == 1000u);
+    raw = 110;
+    pot.update(1040u, 0.02f);
+    CHECK(pot.valid());
+    CHECK(pot.state().turns == 1);
+    raw = 951;
+    pot.update(1080u, 0.04f);
+    raw = 120;
+    pot.update(1120u, 0.04f); // 80ms since success: hidden-wrap ambiguity remains.
+    CHECK(pot.state().status.error == PotIO::ReadError::Discontinuity);
+    CHECK(!pot.turnsValid());
+    CHECK(pot.state().turns == 1);
+    raw = 0;
+    pot.update(1140u, 0.02f);
+    CHECK(pot.state().status.error == PotIO::ReadError::ImplausibleSample);
+    CHECK(!pot.turnsValid());
+    raw = 120;
+    pot.update(1160u, 0.02f);
+    CHECK(pot.state().status.error == PotIO::ReadError::Discontinuity);
+}
+
+static void test_stepped_raw_plausibility()
+{
+    MiniTest::begin("raw rejection cannot seed a step, alter filtering or emit a step event");
+    int raw = 99;
+    using Pot = PotIO::SteppedPot<5u, IntReader, PotIO::EMAFilter>;
+    Pot::Config cfg;
+    cfg.reader = IntReader(&raw);
+    cfg.calib = PotIO::PotCalib{200u, 512u, 800u};
+    cfg.raw_bounds = PotIO::RawBounds{100u, 900u};
+    cfg.filter.alpha = 0.5f;
+    Pot pot(cfg);
+    pot.update(1u, 0.01f);
+    CHECK(!pot.state().status.has_value);
+    CHECK(!pot.state().changed);
+    CHECK(pot.changeSequence() == 0u);
+    raw = 512;
+    pot.update(10u, 0.01f);
+    CHECK(pot.state().step == 2u);
+    CHECK(!pot.state().changed);
+    raw = 800;
+    pot.update(20u, 0.01f);
+    CHECK_NEAR(pot.state().v01, 0.75, 1e-6);
+    const auto good = pot.frame();
+    CHECK(good.changed);
+    raw = 901;
+    pot.update(30u, 0.01f);
+    CHECK(!pot.valid());
+    CHECK(!pot.state().changed);
+    CHECK(pot.state().step == good.step);
+    CHECK(pot.changeSequence() == good.change_sequence);
+    CHECK(pot.state().raw == good.raw);
+    CHECK_NEAR(pot.state().v01, good.v01, 1e-6);
+    CHECK(pot.state().status.sequence == good.status.sequence);
+    raw = 512;
+    pot.update(40u, 0.01f);
+    CHECK(pot.valid());
+    CHECK_NEAR(pot.state().v01, 0.625, 1e-6);
+}
+
 int main()
 {
+    test_raw_bounds_contract();
+    test_linear_plausibility_history();
+    test_joystick_raw_plausibility();
+    test_continuous_raw_plausibility();
+    test_stepped_raw_plausibility();
     test_version_macros();
     test_failed_read_retains_last_good();
     test_explicit_reader_failure();

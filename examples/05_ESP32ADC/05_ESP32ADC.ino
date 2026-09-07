@@ -25,12 +25,12 @@ using namespace PotIO;
 
 // GPIO4 is used here because it is a simple ADC-capable example pin on
 // ESP32-S3 boards. If your board routes ADC differently, change this pin.
-static constexpr int kPotPin = 4;
+const int kPotPin = 4;
 
 // 11 dB is a common Arduino-ESP32 attenuation choice for reading a wider range.
 // Always check your board and sensor wiring: ADC pins are not 5 V tolerant.
-static constexpr int kAttenDb = 11;
-static constexpr int kFullScaleMv = 3300;
+const int kAttenDb = 11;
+const int kFullScaleMv = 3300;
 
 // Replace these with values measured on your own board using this example.
 static const PotCalib kObservedMv{80, 1640, 3190};

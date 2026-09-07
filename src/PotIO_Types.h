@@ -57,7 +57,8 @@ namespace PotIO
         InvalidTiming,        ///< dt was negative, NaN, infinity, or otherwise unusable.
         TimingGap,            ///< dt exceeded the configured maximum processing gap.
         InvalidConfiguration, ///< A built-in policy or device setting is invalid.
-        Discontinuity         ///< ContinuousPot movement could not be tracked unambiguously.
+        Discontinuity,        ///< ContinuousPot movement could not be tracked unambiguously.
+        ImplausibleSample     ///< Acquisition succeeded in reader range but outside enabled raw bounds.
     };
 
     /**
@@ -112,6 +113,30 @@ namespace PotIO
             s.error = (reason == ReadError::None) ? ReadError::ReaderFailure : reason;
             return s;
         }
+    };
+
+    /**
+     * @brief Optional inclusive electrical plausibility envelope, independent of calibration.
+     * Disabled bounds are ignored. Enabled bounds must satisfy lower < upper,
+     * fit the reader and uint16_t raw range, and contain valid calibrated travel.
+     */
+    struct RawBounds
+    {
+        uint32_t lower{0u};    ///< Inclusive minimum; wider storage permits validation before narrowing.
+        uint32_t upper{0u};    ///< Inclusive maximum; values above UINT16_MAX are invalid when enabled.
+        bool enabled{false};  ///< False preserves unguarded reader-range behaviour.
+
+        /** @brief Construct disabled bounds. */
+        RawBounds() = default;
+
+        /**
+         * @brief Enable an inclusive range; the device validates it during update().
+         *
+         * @param lower_ Minimum credible raw value.
+         * @param upper_ Maximum credible raw value, strictly greater than lower_.
+         */
+        RawBounds(uint32_t lower_, uint32_t upper_) noexcept
+            : lower{lower_}, upper{upper_}, enabled{true} {}
     };
 
     /**

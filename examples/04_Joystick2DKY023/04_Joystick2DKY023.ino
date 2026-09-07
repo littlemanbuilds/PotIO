@@ -22,14 +22,14 @@ using namespace PotIO;
 #if defined(ARDUINO_ARCH_ESP32)
 // GPIO4/GPIO5 are used here because they are simple ADC-capable example pins
 // on ESP32-S3 boards. If your board routes ADC differently, change these pins.
-static constexpr int kPinX = 4;
-static constexpr int kPinY = 5;
+const int kPinX = 4;
+const int kPinY = 5;
 #elif defined(ARDUINO_ARCH_ESP8266)
-static constexpr int kPinX = A0;
-static constexpr int kPinY = A0; // Compile fallback only; most ESP8266 boards expose one ADC pin.
+const int kPinX = A0;
+const int kPinY = A0; // Compile fallback only; most ESP8266 boards expose one ADC pin.
 #else
-static constexpr int kPinX = A0;
-static constexpr int kPinY = A1;
+const int kPinX = A0;
+const int kPinY = A1;
 #endif
 
 // RadialScaled means: ignore the small center wobble, then scale the remaining

@@ -28,15 +28,15 @@ using namespace PotIO;
 #if defined(ARDUINO_ARCH_ESP32)
 // GPIO4 is used here because it is a simple ADC-capable example pin on
 // ESP32-S3 boards. If your board routes ADC differently, change this pin.
-static constexpr int kPotPin = 4;
+const int kPotPin = 4;
 #else
-static constexpr int kPotPin = A0;
+const int kPotPin = A0;
 #endif
 
 // Averaging a small number of samples makes the captured calibration point more
 // repeatable without turning this into a complicated data-logging sketch.
-static constexpr int kSamples = 64;
-static constexpr int kSampleDelayMs = 3;
+const int kSamples = 64;
+const int kSampleDelayMs = 3;
 
 static void waitForEnter(const char *prompt)
 {

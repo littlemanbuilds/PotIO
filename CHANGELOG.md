@@ -2,7 +2,20 @@
 
 All notable PotIO changes are documented here.
 
-## [Unreleased]
+## [1.2.0] - 2026-09-07
+
+### Added
+
+- Optional inclusive `RawBounds` on all four devices, with independent joystick axis bounds, disabled by default.
+- Appended `ReadError::ImplausibleSample` for successful in-range acquisitions outside the configured credible envelope. Rejection precedes mapping and processing, retains last-good output and sample identity, and follows existing recovery policies.
+- Configuration validation for ordered, representable bounds within reader range and surrounding otherwise valid calibrated travel.
+- Focused native regressions for raw rejection, processing history, joystick atomicity, continuous tracking, stepped events, and reader representation limits.
+- Raw plausibility guidance and an illustrative steering configuration; physical fault validation remains deferred to hardware integration.
+
+### Fixed
+
+- Default-constructed devices now cache custom-reader full-scale consistently with Config-constructed devices, including rejection of non-positive declarations.
+- Reader full-scale declarations above `UINT16_MAX`, including the configured fallback for readers without `kFullScale`, are rejected before narrowing to prevent truncation of public raw/calibration coordinates.
 
 ## [1.1.0] - 2026-09-01
 

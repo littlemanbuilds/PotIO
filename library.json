@@ -1,6 +1,6 @@
 {
   "name": "PotIO",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Reliable zero-allocation potentiometer and joystick inputs for Arduino projects, with explicit sample validity and errors, strict or permissive calibration, independent filtering/shaping/slew stages, timing-gap protection, joystick geometry policies, continuous-wrap plausibility checks, durable step-change sequencing, rolling jitter tools, and ESP32 ADC helpers.",
   "keywords": "adc,analog,input,potentiometer,joystick,calibration,validity,deadzone,filter,ema,shaping,slew,continuous-pot,stepped-pot,esp32,esp32-s3,arduino",
   "license": "MIT",

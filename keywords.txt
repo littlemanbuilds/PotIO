@@ -4,6 +4,7 @@
 PotIO                       KEYWORD1
 PotCalib                    KEYWORD1
 RawSample                   KEYWORD1
+RawBounds                   KEYWORD1
 SampleStatus                KEYWORD1
 ReadError                   KEYWORD1
 QualityFlag                 KEYWORD1

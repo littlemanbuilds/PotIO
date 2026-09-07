@@ -1,7 +1,7 @@
 #!/usr/bin/env sh
 set -eu
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-python3 - "$ROOT_DIR" <<'PY'
+python3 - "$ROOT_DIR" "${1:-}" <<'PY'
 import json
 import re
 import sys
@@ -33,10 +33,10 @@ manifest = json.loads((root / 'library.json').read_text())
 compat = (root / 'src/PotIO_Compatibility.h').read_text()
 version_match = re.search(r'#define\s+POTIO_VERSION\s+"([^"]+)"', compat)
 version = version_match.group(1) if version_match else ''
-require(version == '1.1.0', 'POTIO_VERSION must be 1.1.0')
+require(version == '1.2.0', 'POTIO_VERSION must be 1.2.0')
 for macro, expected in [
     ('POTIO_VERSION_MAJOR', '1'),
-    ('POTIO_VERSION_MINOR', '1'),
+    ('POTIO_VERSION_MINOR', '2'),
     ('POTIO_VERSION_PATCH', '0'),
 ]:
     require(re.search(r'#define\s+' + macro + r'\s+' + re.escape(expected) + r'\b', compat),
@@ -84,7 +84,7 @@ PotIO is released under the **MIT License**. See [LICENSE](LICENSE).
 
 Copyright © 2026 Darren Osborne.
 """), 'README final license tail does not match the documented license contract')
-require('development baseline' not in readme, 'README must describe the v1.1.0 release candidate, not a development baseline')
+require('development baseline' not in readme, 'README must describe the v1.2.0 release candidate, not a development baseline')
 beginner = readme.split("## Beginner's guide", 1)[1]
 require('```cpp\n#include <PotIO.h>\n#include <Arduino.h>\n' in beginner,
         'README beginner snippet must include PotIO.h before Arduino.h')
@@ -139,7 +139,7 @@ def inventory_paths(repo_root):
             if path.is_file()
         )
     proc = subprocess.run(
-        ['git', '-C', str(repo_root), 'ls-files', '-z'],
+        ['git', '-C', str(repo_root), 'ls-files', '--cached', '--others', '--exclude-standard', '-z'],
         stdout=subprocess.PIPE,
         stderr=subprocess.DEVNULL,
         check=False,
@@ -180,5 +180,19 @@ if errors:
     for error in errors:
         print('ERROR:', error)
     sys.exit(1)
+# Exercise the distribution without Git metadata or local include/build context.
+if sys.argv[2] != '--package':
+    import shutil
+    with tempfile.TemporaryDirectory(prefix='potio-package-check-') as temp_dir:
+        package = Path(temp_dir) / 'PotIO'
+        package.mkdir()
+        for relative in inventory_paths(root):
+            source = root / relative
+            destination = package / relative
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(source, destination)
+        subprocess.run(['sh', str(package / 'test/check_release_contracts.sh'), '--package'], check=True)
+        subprocess.run(['sh', str(package / 'test/check_examples_syntax.sh')], check=True)
+
 print('Release contracts passed: version, manifests, documentation headers, remediation markers, and package hygiene.')
 PY

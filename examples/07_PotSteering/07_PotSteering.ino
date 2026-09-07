@@ -28,9 +28,9 @@ using namespace PotIO;
 #if defined(ARDUINO_ARCH_ESP32)
 // GPIO4 is used here because it is a simple ADC-capable example pin on
 // ESP32-S3 boards. If your board routes ADC differently, change this pin.
-static constexpr int kPotPin = 4;
+const int kPotPin = 4;
 #else
-static constexpr int kPotPin = A0;
+const int kPotPin = A0;
 #endif
 
 #if defined(ARDUINO_ARCH_ESP32)
@@ -53,6 +53,15 @@ static SteeringPot makeSteeringPot()
     // The example constants are board-family friendly guesses, not exact
     // steering values.
     cfg.calib = kExampleSteeringCalib;
+
+    // Illustrative electrical envelope, separate from calibrated travel.
+    // Replace these bounds with measured hardware values plus suitable margin.
+    // They cannot detect every wiring fault or grant permission to actuate.
+#if defined(ARDUINO_ARCH_ESP32)
+    cfg.raw_bounds = RawBounds{100u, 4000u};
+#else
+    cfg.raw_bounds = RawBounds{25u, 1000u};
+#endif
 
     // A little smoothing removes ADC twitch without hiding the live input.
     cfg.filter.alpha = 0.12f;

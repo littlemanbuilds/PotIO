@@ -4,7 +4,7 @@ PotIO is a small, allocation-free Arduino library for turning potentiometers and
 
 It supports linear potentiometers, two-axis joysticks, cyclic/continuous analog controls, and analog controls used as stable discrete selectors. PotIO owns **input acquisition and interpretation**. It deliberately does not own motor control, vehicle policy, task transport, persistence, or application safety decisions.
 
-- **Current version:** v1.1.0
+- **Current version:** v1.2.0
 - **Primary development target:** ESP32-S3 / Arduino
 - **Language level:** C++11
 
@@ -17,6 +17,7 @@ It supports linear potentiometers, two-axis joysticks, cyclic/continuous analog 
 - [Installation](#installation)
 - [Beginner's guide](#beginners-guide)
 - [The v1.1 validity model](#the-v11-validity-model)
+- [Raw plausibility](#raw-plausibility)
 - [Calibration](#calibration)
 - [LinearPot](#linearpot)
 - [Joystick2D](#joystick2d)
@@ -322,6 +323,7 @@ The latest invalid update reports one primary reason:
 | `TimingGap` | `dt_s` exceeded `max_dt_s`. |
 | `InvalidConfiguration` | A built-in policy/device setting was invalid. |
 | `Discontinuity` | ContinuousPot motion could not be tracked unambiguously. |
+| `ImplausibleSample` | Acquisition succeeded inside reader range but outside enabled raw plausibility bounds. |
 
 ### What happens on an invalid update?
 
@@ -338,6 +340,68 @@ PotIO deliberately does **not** advance:
 The public numeric output stays at its last-good value.
 
 `InvalidSamplePolicy::ResetProcessing` is available when an application explicitly wants filter/rate history reseeded after invalid acquisition. The default is `HoldState`.
+
+---
+
+## Raw plausibility
+
+v1.2 adds optional `RawBounds` to reject successfully acquired but electrically
+implausible samples before calibration, mapping, shaping, filtering, rate limiting,
+or device-specific interpretation. Bounds are disabled by default, preserving
+v1.1 endpoint behaviour. Calibration endpoints are never implicit rejection limits.
+
+These are three separate settings:
+
+| Setting | Meaning | Example |
+|---|---|---|
+| Reader `kFullScale` | ADC/reader representation, starting at zero | `4095` |
+| `PotCalib` | Measured travel and center used to map output | `{200, 2048, 3900}` |
+| `RawBounds` | Inclusive credible electrical envelope | `{100, 4000}` |
+
+For a device whose reader declares 4095, configuration can include:
+
+```cpp
+cfg.calib = PotIO::PotCalib{200, 2048, 3900};
+cfg.raw_bounds = PotIO::RawBounds{100, 4000}; // Illustrative only; measure your hardware.
+```
+
+`LinearPot`, `ContinuousPot`, and `SteppedPot` use `Config::raw_bounds`.
+`Joystick2D` uses independent `Config::raw_bounds_x` and `raw_bounds_y`.
+`RawBounds{}` disables the check; the two-argument constructor enables it.
+Changing bounds through `setConfig()` does not itself change the calibration
+coordinate system or reset processing history.
+
+Enabled bounds must have `lower < upper`, remain within the reader range and
+`UINT16_MAX`, and contain both endpoints of any otherwise valid calibration.
+Invalid settings report `InvalidConfiguration`. The bound fields use `uint32_t`
+so an oversized setting can be rejected before narrowing; public raw state and
+calibration remain `uint16_t`. Invalid calibration in `PermissiveDefault` mode
+does not impose additional calibration-dependent bounds requirements. Disabled
+bounds are ignored even if their stored endpoints are inconsistent.
+
+With the settings above, raw 100 and 4000 are accepted, while 50 reports
+`ImplausibleSample`. This differs from `ReaderFailure` (acquisition failed) and
+`OutOfRange` (the reader exceeded its declared range). A plausibility failure is
+an invalid current sample, not a quality warning: last-good numeric output,
+`sample_ms`, and successful `sequence` remain retained. No filter/rate history,
+partial joystick frame, continuous phase/wrap/turn state, or stepped-pot change
+event advances. `InvalidSamplePolicy::ResetProcessing` still deliberately resets
+processing history for recovery; `HoldState` retains it. ContinuousPot evaluates
+the next credible phase against the last successful phase and timestamp, using
+its separate motion ambiguity checks.
+
+Bounds can detect values outside a measured credible electrical range, but cannot
+guarantee detection of every open circuit, short, noise condition, or sensor
+failure. Establish them from measured hardware behaviour with appropriate margin;
+do not guess tight bounds from nominal values alone. The steering example shows
+illustrative settings that must be replaced for the actual hardware. PotIO validity
+is input evidence, not whole-machine permission to actuate. Physical rail/open/short
+validation remains a hardware integration task.
+
+Custom reader full-scale declarations must be positive and no greater than
+`UINT16_MAX`. The same rule applies to `POTIO_DEFAULT_FULLSCALE` for readers
+without `kFullScale`. Larger declarations report `InvalidConfiguration` rather than
+silently truncating samples. Default and Config construction apply the same rule.
 
 ---
 
@@ -889,7 +953,12 @@ Run:
 ./test/run_host_checks.sh
 ```
 
-This is the quickest local release check. It runs the native tests, sanitizer pass, example syntax checks, and release-contract checks.
+This runs GCC and Clang native tests, Clang ASan/UBSan, strict example syntax
+checks, and release-contract checks including a temporary distribution copy.
+Both compilers must be installed. If `g++` is a Clang alias (as on macOS), select
+the installed GNU compiler explicitly, for example
+`GCC_CXX=g++-16 sh test/run_host_checks.sh`. `CLANG_CXX` can select a specific
+Clang executable.
 
 ### Native deterministic tests
 
@@ -1083,7 +1152,7 @@ PotIO/
 Current version:
 
 ```text
-1.1.0
+1.2.0
 ```
 
 See [CHANGELOG.md](CHANGELOG.md) for detailed release history.

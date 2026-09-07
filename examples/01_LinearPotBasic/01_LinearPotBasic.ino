@@ -28,9 +28,9 @@ using namespace PotIO;
 // GPIO4 is used here because it is a simple ADC-capable example pin on
 // ESP32-S3 boards. If your board routes ADC differently, change this pin.
 #if defined(ARDUINO_ARCH_ESP32)
-static constexpr int kPotPin = 4;
+const int kPotPin = 4;
 #else
-static constexpr int kPotPin = A0;
+const int kPotPin = A0;
 #endif
 
 // The factory creates a LinearPot using Arduino analogRead().

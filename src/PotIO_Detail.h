@@ -23,13 +23,19 @@ namespace PotIO
         template <typename T, typename = void>
         struct FullScale
         {
-            static constexpr int value = POTIO_DEFAULT_FULLSCALE;
+            // Legacy readers use the configured fallback, with the same raw
+            // representation boundary as an explicit reader declaration.
+            static constexpr int value = (POTIO_DEFAULT_FULLSCALE > 0 && POTIO_DEFAULT_FULLSCALE <= UINT16_MAX)
+                                             ? static_cast<int>(POTIO_DEFAULT_FULLSCALE) : 0;
         };
 
         template <typename T>
         struct FullScale<T, decltype((void)T::kFullScale, void())>
         {
-            static constexpr int value = T::kFullScale;
+            // Validate the original declaration before converting: a wider unsigned
+            // full-scale must not wrap into an apparently valid int range.
+            static constexpr int value = (T::kFullScale > 0 && T::kFullScale <= UINT16_MAX)
+                                             ? static_cast<int>(T::kFullScale) : 0;
         };
 
         /**
@@ -74,10 +80,11 @@ namespace PotIO
          * @tparam Reader Callable returning int or RawSample.
          * @param reader Reader instance, invoked once.
          * @param fullscale Maximum accepted raw value.
-         * @return Sample in [0,fullscale], or an explicit reader/range failure.
+         * @param bounds Validated optional plausibility envelope.
+         * @return Credible sample in [0,fullscale], or an acquisition, range, or plausibility failure.
          */
         template <typename Reader>
-        inline RawSample acquire(Reader &reader, int fullscale) noexcept
+        inline RawSample acquire(Reader &reader, int fullscale, const RawBounds &bounds = RawBounds{}) noexcept
         {
             RawSample sample = normalize_sample(reader());
             if (!sample.valid)
@@ -86,7 +93,32 @@ namespace PotIO
                 return RawSample::failure(ReadError::ReaderFailure);
             if (sample.raw > fullscale)
                 return RawSample::failure(ReadError::OutOfRange);
+            if (bounds.enabled && (static_cast<uint32_t>(sample.raw) < bounds.lower ||
+                                   static_cast<uint32_t>(sample.raw) > bounds.upper))
+                return RawSample::failure(ReadError::ImplausibleSample);
             return sample;
+        }
+
+        /**
+         * @brief Validate optional bounds without treating calibration fallback as measured travel.
+         *
+         * @param bounds Optional inclusive raw envelope; disabled contents are ignored.
+         * @param fullscale Validated positive reader maximum.
+         * @param calib Configured calibration.
+         * @param min_span Minimum span used to decide whether calibration is usable.
+         * @return True when disabled, or ordered, representable bounds contain any valid calibration.
+         */
+        inline bool raw_bounds_valid(const RawBounds &bounds, int fullscale,
+                                     const PotCalib &calib, uint16_t min_span) noexcept
+        {
+            if (!bounds.enabled)
+                return true;
+            if (bounds.lower >= bounds.upper || bounds.upper > UINT16_MAX ||
+                bounds.upper > static_cast<uint32_t>(fullscale))
+                return false;
+            // Invalid permissive calibration is not an expected travel envelope.
+            return !calib.valid_centered_for(fullscale, min_span) ||
+                   (bounds.lower <= calib.min && bounds.upper >= calib.max);
         }
 
         /**

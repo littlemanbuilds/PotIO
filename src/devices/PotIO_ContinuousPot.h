@@ -54,6 +54,7 @@ namespace PotIO
             float max_turns_per_s{8.0f};                                                ///< Maximum plausible velocity; also bounds the unambiguous sample interval.
             float max_dt_s{0.5f};                                                       ///< Largest accepted processing gap in seconds.
             InvalidSamplePolicy invalid_sample_policy{InvalidSamplePolicy::HoldState};  ///< Filter/rate recovery policy.
+            RawBounds raw_bounds{}; ///< Optional inclusive raw plausibility envelope.
         };
 
         /** @brief Public state produced by update(). */
@@ -133,7 +134,7 @@ namespace PotIO
                 return;
             }
 
-            const RawSample sample = detail::acquire(cfg_.reader, fs_);
+            const RawSample sample = detail::acquire(cfg_.reader, fs_, cfg_.raw_bounds);
             if (!sample.valid)
             {
                 fail_(sample.error, calibration_ok, quality);
@@ -362,6 +363,8 @@ namespace PotIO
         {
             if (!full_scale_valid_ || cfg_.min_calibration_span == 0u)
                 return ReadError::InvalidConfiguration;
+            if (!detail::raw_bounds_valid(cfg_.raw_bounds, fs_, cfg_.calib, cfg_.min_calibration_span))
+                return ReadError::InvalidConfiguration;
             if (!detail::valid_calibration_policy(cfg_.calibration_policy) ||
                 !detail::valid_invalid_sample_policy(cfg_.invalid_sample_policy))
                 return ReadError::InvalidConfiguration;
@@ -476,7 +479,7 @@ namespace PotIO
 
         Config cfg_{};
         State st_{};
-        int fs_{POTIO_DEFAULT_FULLSCALE};
+        int fs_{1};
         bool full_scale_valid_{true};
         TimeFn time_fn_{nullptr};
         detail::DtState dt_{};

@@ -1,6 +1,6 @@
 # PotIO Release Checklist
 
-Use this checklist before creating a PotIO release archive or registry submission.
+Use this checklist for PotIO v1.2.0 before creating a release archive or registry submission.
 
 ## Source and API
 
@@ -11,10 +11,13 @@ Use this checklist before creating a PotIO release archive or registry submissio
 - [ ] No accidental dependency on another LMB library is introduced.
 - [ ] Reader failure retains last-good output and reports invalid status.
 - [ ] Calibration/timing/configuration errors cannot become plausible fresh commands.
+- [ ] Disabled raw bounds preserve endpoint behaviour; enabled bounds reject implausible input before processing.
+- [ ] Rejection retains sample identity, joystick atomicity, continuous tracking, and stepped event history.
+- [ ] Both constructors reject non-positive and oversized reader full-scale declarations.
 
 ## Tests
 
-- [ ] `./test/run_native_tests.sh` passes with strict warnings.
+- [ ] `./test/run_native_tests.sh` passes with strict warnings under both GCC and Clang.
 - [ ] `./test/run_sanitizers.sh` passes under ASan/UBSan.
 - [ ] `./test/check_examples_syntax.sh` passes.
 - [ ] `./test/check_release_contracts.sh` passes.
@@ -23,6 +26,12 @@ Use this checklist before creating a PotIO release archive or registry submissio
 - [ ] ESP32-S3 examples compile against the current Arduino-ESP32 core.
 
 ## Hardware
+
+Physical analogue fault validation is deferred to project/hardware integration;
+compilation and native tests do not complete these checks.
+
+- [ ] Plausibility bounds established from measured travel and fault behaviour with margin.
+- [ ] Rail/open/short and noise behaviour checked on the actual circuit.
 
 - [ ] Basic raw ADC reading checked on an ESP32-S3 DevKitC-1.
 - [ ] Calibration example exercised on real hardware.
