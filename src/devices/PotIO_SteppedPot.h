@@ -66,21 +66,43 @@ namespace PotIO
 
         using Frame = State; ///< POD-style latest-state frame.
 
-        SteppedPot() = default;
+        /**
+         * @brief Construct an unseeded device with default configuration and cache its reader range.
+         */
+        SteppedPot() noexcept(noexcept(Config{})) { precompute_(); }
 
-        /** @brief Construct with configuration. */
+        /**
+         * @brief Copy configuration into an unseeded device.
+         *
+         * @param c Configuration; validity is checked during update().
+         */
         explicit SteppedPot(const Config &c) : cfg_(c) { precompute_(); }
 
-        /** @brief Inject a custom millisecond time source. */
+        /**
+         * @brief Select the clock used by update().
+         *
+         * @param fn Millisecond clock, or nullptr for Arduino millis() (zero on a host).
+         */
         void setTimeSource(TimeFn fn) noexcept { time_fn_ = fn; }
 
         /** @brief Update using the configured/default time source. */
         void update() noexcept { update(detail::time_now_ms(time_fn_)); }
 
-        /** @brief Update using an external timestamp with wrap-safe internal dt. */
+        /**
+         * @brief Update using elapsed time since the preceding timestamp-only call.
+         *
+         * @param now_ms Current millisecond tick; first call uses zero elapsed time.
+         * @note The attempt clock advances even on failure. Explicit-dt calls do not advance it.
+         */
         void update(uint32_t now_ms) noexcept { update(now_ms, dt_.step(now_ms)); }
 
-        /** @brief Acquire and quantize one sample. */
+        /**
+         * @brief Acquire and quantize one sample.
+         *
+         * @param now_ms Current millisecond timestamp.
+         * @param dt_s Elapsed processing seconds, finite and in [0,max_dt_s].
+         * @note Does not advance the internal timestamp-only clock. Failure retains output values.
+         */
         void update(uint32_t now_ms, float dt_s) noexcept
         {
             st_.t_ms = now_ms;
@@ -143,20 +165,37 @@ namespace PotIO
             detail::mark_success(st_.status, now_ms, calibration_ok, quality);
         }
 
-        /** @brief Get the latest state. */
+        /**
+         * @brief Get a reference to the latest state.
+         *
+         * @return Internal state, changed by subsequent updates or resets; check status.valid for freshness.
+         */
         POTIO_NODISCARD const State &state() const noexcept { return st_; }
 
-        /** @brief Get a copy of the latest state. */
+        /**
+         * @brief Copy the latest state for application-owned storage.
+         *
+         * @return State snapshot including validity and retained values; concurrent access requires synchronization.
+         */
         POTIO_NODISCARD Frame frame() const noexcept { return st_; }
 
-        /** @brief True when the latest update produced fresh valid data. */
+        /**
+         * @brief Check whether the latest update produced usable data.
+         *
+         * @return True for a successful latest update, false initially or after failure.
+         */
         POTIO_NODISCARD bool valid() const noexcept { return st_.status.valid; }
 
-        /** @brief Get the durable step-change counter. */
+        /**
+         * @brief Get the durable step-change counter.
+         *
+         * @return Wrapping count of accepted step transitions; first seeding is not a transition.
+         */
         POTIO_NODISCARD uint32_t changeSequence() const noexcept { return st_.change_sequence; }
 
         /**
          * @brief Replace configuration.
+         *
          * @param c New configuration bundle.
          * @param reset_state Clear public state, current step, and filter history.
          */
@@ -185,10 +224,18 @@ namespace PotIO
             reset_processing_();
         }
 
-        /** @brief Get effective reader full-scale. */
+        /**
+         * @brief Get effective reader full-scale.
+         *
+         * @return Positive reader maximum, or one when the declaration is invalid; update() rejects that configuration.
+         */
         POTIO_NODISCARD int fullScale() const noexcept { return fs_; }
 
     private:
+        /**
+         * @brief Cache the reader range, substituting one for an invalid declaration.
+         * Invalid declarations still cause update() to reject the configuration.
+         */
         void precompute_() noexcept
         {
             const int declared = detail::FullScale<Reader>::value;
@@ -196,6 +243,11 @@ namespace PotIO
             fs_ = full_scale_valid_ ? declared : 1;
         }
 
+        /**
+         * @brief Validate device settings and available policy validation hooks.
+         *
+         * @return InvalidConfiguration for unusable settings, otherwise None; calibration is checked separately.
+         */
         ReadError validate_config_() const noexcept
         {
             if (!full_scale_valid_ || cfg_.min_calibration_span == 0u)
@@ -212,11 +264,22 @@ namespace PotIO
             return ReadError::None;
         }
 
+        /**
+         * @brief Get the uniform bin width in normalized coordinates.
+         *
+         * @return 1/Steps, with Steps constrained at compile time to [2,255].
+         */
         static float step_width_() noexcept
         {
             return 1.0f / static_cast<float>(Steps);
         }
 
+        /**
+         * @brief Select a bin without a previous step or hysteresis.
+         *
+         * @param v01 Finite normalized input.
+         * @return Bin index clamped to [0,Steps-1], including the full-scale endpoint.
+         */
         uint8_t quantize_first_(float v01) const noexcept
         {
             const float w = step_width_();
@@ -228,6 +291,13 @@ namespace PotIO
             return static_cast<uint8_t>(idx);
         }
 
+        /**
+         * @brief Retain the current bin inside its inclusive hysteresis band.
+         *
+         * @param v01 Finite normalized input.
+         * @param current Previous accepted step in [0,Steps-1].
+         * @return Current step within the hold band, otherwise the direct destination bin.
+         */
         uint8_t quantize_(float v01, uint8_t current) const noexcept
         {
             const float w = step_width_();
@@ -239,6 +309,13 @@ namespace PotIO
             return quantize_first_(v01);
         }
 
+        /**
+         * @brief Mark this attempt invalid and apply the selected history recovery policy.
+         *
+         * @param error Failure reason.
+         * @param calibration_ok Whether configured calibration is usable.
+         * @param quality Quality flags for this attempt.
+         */
         void fail_(ReadError error, bool calibration_ok, uint16_t quality) noexcept
         {
             detail::mark_failure(st_.status, error, calibration_ok, quality);
@@ -247,6 +324,10 @@ namespace PotIO
                 reset_processing_();
         }
 
+        /**
+         * @brief Discard filter history so the next accepted input seeds processing.
+         * Public output and the attempt clock are retained.
+         */
         void reset_processing_() noexcept
         {
             filtered_v01_ = 0.f;

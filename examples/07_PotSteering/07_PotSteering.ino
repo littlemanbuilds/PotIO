@@ -3,6 +3,7 @@
  *
  * @file 07_PotSteering.ino
  * @brief Use a potentiometer as steering-style normalized input.
+ *
  * @author Little Man Builds (Darren Osborne)
  * @date 2026-06-02
  * @copyright Copyright © 2026 Little Man Builds
@@ -22,29 +23,31 @@
 
 #include <Arduino.h>
 
+using namespace PotIO;
+
 #if defined(ARDUINO_ARCH_ESP32)
 // GPIO4 is used here because it is a simple ADC-capable example pin on
 // ESP32-S3 boards. If your board routes ADC differently, change this pin.
-static constexpr uint8_t kPotPin = 4;
+static constexpr int kPotPin = 4;
 #else
-static constexpr uint8_t kPotPin = A0;
+static constexpr int kPotPin = A0;
 #endif
 
 #if defined(ARDUINO_ARCH_ESP32)
-static const PotIO::PotCalib kExampleSteeringCalib{200, 2048, 3900};
+static const PotCalib kExampleSteeringCalib{200, 2048, 3900};
 #else
-static const PotIO::PotCalib kExampleSteeringCalib{50, 512, 975};
+static const PotCalib kExampleSteeringCalib{50, 512, 975};
 #endif
 
-using SteeringPot = PotIO::LinearPot<PotIO::ArduinoAnalogRead,
-                                     PotIO::EMAFilter,
-                                     PotIO::SlewRate,
-                                     PotIO::ShapeIdentity>;
+using SteeringPot = LinearPot<ArduinoAnalogRead,
+                                     EMAFilter,
+                                     SlewRate,
+                                     ShapeIdentity>;
 
 static SteeringPot makeSteeringPot()
 {
-    typename SteeringPot::Config cfg;
-    cfg.reader = PotIO::ArduinoAnalogRead(kPotPin);
+    SteeringPot::Config cfg;
+    cfg.reader = ArduinoAnalogRead(kPotPin);
 
     // Replace this with values from 02_PotCalibration for your own hardware.
     // The example constants are board-family friendly guesses, not exact
@@ -63,12 +66,12 @@ static SteeringPot makeSteeringPot()
 
 static int toDisplayPercent(float centered)
 {
-    const float t = PotIO::clamp01((centered + 1.0f) * 0.5f);
+    const float t = clamp01((centered + 1.0f) * 0.5f);
     return static_cast<int>((t * 100.0f) + 0.5f);
 }
 
 static SteeringPot steering = makeSteeringPot();
-static PotIO::JitterStats jitter{};
+static JitterStats jitter{};
 
 void setup()
 {
@@ -86,7 +89,7 @@ void loop()
     const auto s = steering.state();
     if (!s.status.valid)
     {
-        Serial.println("sample invalid - holding the last steering input");
+        Serial.println("sample invalid - steering input unavailable");
         delay(20);
         return;
     }
@@ -97,7 +100,7 @@ void loop()
     jitter.observe(rawCounts);
 
     const float suggestedDeadzone =
-        PotIO::suggest_deadzone_from_jitter(jitter.peak_to_peak(),
+        suggest_deadzone_from_jitter(jitter.peak_to_peak(),
                                             static_cast<uint16_t>(steering.fullScale()),
                                             5);
 

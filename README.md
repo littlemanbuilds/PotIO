@@ -944,14 +944,13 @@ Run:
 ./test/check_release_contracts.sh
 ```
 
-This checks version consistency, package metadata, example manifests, Doxygen/LMB headers, required test structure, and unwanted generated files.
+This checks version consistency, package metadata, example manifests, source documentation headers, required test structure, and unwanted generated files.
 
 ### Hardware / PlatformIO compile matrix
 
 The repository workflow is configured to compile the portable public API across representative Arduino targets including:
 
 - ESP32-S3 DevKitC-1;
-- classic ESP32;
 - ESP8266;
 - RP2040;
 - SAMD;
@@ -1081,10 +1080,13 @@ PotIO/
 
 ## Version history
 
-See [CHANGELOG.md](CHANGELOG.md) for detailed release notes.
+Current version:
 
-- **v1.1.0** — explicit acquisition validity, strict calibration option, corrected processing-stage state, timing validation, joystick geometry/deadzone improvements, ContinuousPot plausibility, durable SteppedPot change sequencing, rolling jitter, and full test/release structure.
-- **v1.0.0** — initial public release.
+```text
+1.1.0
+```
+
+See [CHANGELOG.md](CHANGELOG.md) for detailed release history.
 
 ---
 
@@ -1092,4 +1094,4 @@ See [CHANGELOG.md](CHANGELOG.md) for detailed release notes.
 
 PotIO is released under the **MIT License**. See [LICENSE](LICENSE).
 
-Copyright © 2026 Little Man Builds (Darren Osborne).
+Copyright © 2026 Darren Osborne.

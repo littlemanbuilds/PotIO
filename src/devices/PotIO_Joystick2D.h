@@ -75,21 +75,43 @@ namespace PotIO
 
         using Frame = State; ///< POD-style latest-state frame.
 
-        Joystick2D() = default;
+        /**
+         * @brief Construct an unseeded device with default configuration and cache its reader range.
+         */
+        Joystick2D() noexcept(noexcept(Config{})) { precompute_(); }
 
-        /** @brief Construct with configuration. */
+        /**
+         * @brief Copy configuration into an unseeded device.
+         *
+         * @param c Configuration; validity is checked during update().
+         */
         explicit Joystick2D(const Config &c) : cfg_(c) { precompute_(); }
 
-        /** @brief Inject a custom millisecond time source. */
+        /**
+         * @brief Select the clock used by update().
+         *
+         * @param fn Millisecond clock, or nullptr for Arduino millis() (zero on a host).
+         */
         void setTimeSource(TimeFn fn) noexcept { time_fn_ = fn; }
 
         /** @brief Update using the configured/default time source. */
         void update() noexcept { update(detail::time_now_ms(time_fn_)); }
 
-        /** @brief Update using an external timestamp with wrap-safe internal dt. */
+        /**
+         * @brief Update using elapsed time since the preceding timestamp-only call.
+         *
+         * @param now_ms Current millisecond tick; first call uses zero elapsed time.
+         * @note The attempt clock advances even on failure. Explicit-dt calls do not advance it.
+         */
         void update(uint32_t now_ms) noexcept { update(now_ms, dt_.step(now_ms)); }
 
-        /** @brief Acquire and process one two-axis sample. */
+        /**
+         * @brief Acquire and process one two-axis sample.
+         *
+         * @param now_ms Current millisecond timestamp.
+         * @param dt_s Elapsed processing seconds, finite and in [0,max_dt_s].
+         * @note Does not advance the internal timestamp-only clock. Failure retains output values.
+         */
         void update(uint32_t now_ms, float dt_s) noexcept
         {
             st_.t_ms = now_ms;
@@ -187,35 +209,72 @@ namespace PotIO
             detail::mark_success(st_.status, now_ms, calibration_ok, quality);
         }
 
-        /** @brief Get the latest state. */
+        /**
+         * @brief Get a reference to the latest state.
+         *
+         * @return Internal state, changed by subsequent updates or resets; check status.valid for freshness.
+         */
         POTIO_NODISCARD const State &state() const noexcept { return st_; }
 
-        /** @brief Get a copy of the latest state. */
+        /**
+         * @brief Copy the latest state for application-owned storage.
+         *
+         * @return State snapshot including validity and retained values; concurrent access requires synchronization.
+         */
         POTIO_NODISCARD Frame frame() const noexcept { return st_; }
 
-        /** @brief True when the latest update produced fresh valid data. */
+        /**
+         * @brief Check whether the latest update produced usable data.
+         *
+         * @return True for a successful latest update, false initially or after failure.
+         */
         POTIO_NODISCARD bool valid() const noexcept { return st_.status.valid; }
 
-        /** @brief Get latest X-axis value. */
+        /**
+         * @brief Get latest X-axis value.
+         *
+         * @return Retained X output in [-1,1]; check valid() for freshness.
+         */
         POTIO_NODISCARD float x() const noexcept { return st_.x; }
 
-        /** @brief Get latest Y-axis value. */
+        /**
+         * @brief Get latest Y-axis value.
+         *
+         * @return Retained Y output in [-1,1]; check valid() for freshness.
+         */
         POTIO_NODISCARD float y() const noexcept { return st_.y; }
 
-        /** @brief Get latest radial magnitude. */
+        /**
+         * @brief Get latest radial magnitude.
+         *
+         * @return Retained magnitude clamped to [0,1], or zero when ComputeMag is false.
+         */
         POTIO_NODISCARD float magnitude() const noexcept { return st_.mag; }
 
-        /** @brief True when angleRad()/angleDeg() is meaningful. */
+        /**
+         * @brief True when angleRad()/angleDeg() is meaningful.
+         *
+         * @return True for a valid non-neutral vector when ComputeAngle is enabled.
+         */
         POTIO_NODISCARD bool angleValid() const noexcept { return st_.angle_valid; }
 
-        /** @brief Get latest angle in radians; check angleValid() at neutral. */
+        /**
+         * @brief Get latest angle in radians; check angleValid() at neutral.
+         *
+         * @return Angle in [-pi,pi]; zero for neutral/disabled angle on a successful update. Check angleValid().
+         */
         POTIO_NODISCARD float angleRad() const noexcept { return st_.angle; }
 
-        /** @brief Get latest angle in degrees; check angleValid() at neutral. */
+        /**
+         * @brief Get latest angle in degrees; check angleValid() at neutral.
+         *
+         * @return Angle in [-180,180]; check angleValid() before interpreting it.
+         */
         POTIO_NODISCARD float angleDeg() const noexcept { return rad2deg(st_.angle); }
 
         /**
          * @brief Replace configuration.
+         *
          * @param c New configuration bundle.
          * @param reset_state Clear public state as well as processing history.
          */
@@ -241,13 +300,25 @@ namespace PotIO
             reset_processing_();
         }
 
-        /** @brief Get X reader full-scale. */
+        /**
+         * @brief Get X reader full-scale.
+         *
+         * @return Positive X reader maximum, or one for an invalid declaration rejected on update.
+         */
         POTIO_NODISCARD int fullScaleX() const noexcept { return fs_x_; }
 
-        /** @brief Get Y reader full-scale. */
+        /**
+         * @brief Get Y reader full-scale.
+         *
+         * @return Positive Y reader maximum, or one for an invalid declaration rejected on update.
+         */
         POTIO_NODISCARD int fullScaleY() const noexcept { return fs_y_; }
 
     private:
+        /**
+         * @brief Cache the reader range, substituting one for an invalid declaration.
+         * Invalid declarations still cause update() to reject the configuration.
+         */
         void precompute_() noexcept
         {
             const int declared_x = detail::FullScale<ReadX>::value;
@@ -257,6 +328,11 @@ namespace PotIO
             fs_y_ = (declared_y > 0) ? declared_y : 1;
         }
 
+        /**
+         * @brief Validate device settings and available policy validation hooks.
+         *
+         * @return InvalidConfiguration for unusable settings, otherwise None; calibration is checked separately.
+         */
         ReadError validate_config_() const noexcept
         {
             if (!full_scale_valid_ || cfg_.min_calibration_span == 0u)
@@ -279,6 +355,12 @@ namespace PotIO
             return ReadError::None;
         }
 
+        /**
+         * @brief Apply the configured deadzone before geometry and shaping.
+         *
+         * @param x Finite centered X coordinate, modified in place.
+         * @param y Finite centered Y coordinate, modified in place.
+         */
         void apply_deadzone_(float &x, float &y) const noexcept
         {
             const float dz = cfg_.deadzone_size;
@@ -313,6 +395,14 @@ namespace PotIO
             }
         }
 
+        /**
+         * @brief Suppress the center region of one axis, optionally remapping remaining travel.
+         *
+         * @param value Finite centered axis value in [-1,1].
+         * @param dz Validated deadzone fraction below one.
+         * @param scaled Whether to stretch the remaining travel back to full scale.
+         * @return Zero inside the inclusive deadzone, otherwise the signed remaining response.
+         */
         static float apply_axial_(float value, float dz, bool scaled) noexcept
         {
             const float a = fabs(value);
@@ -324,6 +414,12 @@ namespace PotIO
             return (value < 0.f) ? -remapped : remapped;
         }
 
+        /**
+         * @brief Constrain or transform a square-domain vector using the configured geometry.
+         *
+         * @param x Finite X coordinate, clamped and modified in place.
+         * @param y Finite Y coordinate, clamped and modified in place.
+         */
         void apply_geometry_(float &x, float &y) const noexcept
         {
             x = clamp11(x);
@@ -356,6 +452,13 @@ namespace PotIO
             }
         }
 
+        /**
+         * @brief Mark this attempt invalid and apply the selected history recovery policy.
+         *
+         * @param error Failure reason.
+         * @param calibration_ok Whether configured calibration is usable.
+         * @param quality Quality flags for this attempt.
+         */
         void fail_(ReadError error, bool calibration_ok, uint16_t quality) noexcept
         {
             detail::mark_failure(st_.status, error, calibration_ok, quality);
@@ -364,6 +467,10 @@ namespace PotIO
                 reset_processing_();
         }
 
+        /**
+         * @brief Discard filter history so the next accepted input seeds processing.
+         * Public output and the attempt clock are retained.
+         */
         void reset_processing_() noexcept
         {
             filtered_x_ = 0.f;

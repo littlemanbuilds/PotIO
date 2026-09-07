@@ -2,7 +2,8 @@
  * MIT License
  *
  * @file 02_PotCalibration.ino
- * @brief Measure real min, center, and max values for PotIO::PotCalib.
+ * @brief Measure real min, center, and max values for PotCalib.
+ *
  * @author Little Man Builds (Darren Osborne)
  * @date 2026-06-02
  * @copyright Copyright © 2026 Little Man Builds
@@ -15,25 +16,27 @@
  *   1. Move to the low end and press ENTER.
  *   2. Move to the physical center and press ENTER.
  *   3. Move to the high end and press ENTER.
- *   4. Copy the printed PotIO::PotCalib into your real sketch.
+ *   4. Copy the printed PotCalib into your real sketch.
  */
 
 #include <PotIO.h>
 
 #include <Arduino.h>
 
+using namespace PotIO;
+
 #if defined(ARDUINO_ARCH_ESP32)
 // GPIO4 is used here because it is a simple ADC-capable example pin on
 // ESP32-S3 boards. If your board routes ADC differently, change this pin.
-static constexpr uint8_t kPotPin = 4;
+static constexpr int kPotPin = 4;
 #else
-static constexpr uint8_t kPotPin = A0;
+static constexpr int kPotPin = A0;
 #endif
 
 // Averaging a small number of samples makes the captured calibration point more
 // repeatable without turning this into a complicated data-logging sketch.
-static constexpr uint16_t kSamples = 64;
-static constexpr uint16_t kSampleDelayMs = 3;
+static constexpr int kSamples = 64;
+static constexpr int kSampleDelayMs = 3;
 
 static void waitForEnter(const char *prompt)
 {
@@ -59,22 +62,33 @@ static void waitForEnter(const char *prompt)
         (void)Serial.read();
 }
 
-static uint16_t readAverage()
+// Calibration stores raw ADC counts in uint16_t; reject failed/out-of-range
+// reads before converting them into that storage representation.
+static bool readAverage(uint16_t &average)
 {
+    // A 32-bit accumulator holds 64 full 16-bit ADC samples even on AVR.
     uint32_t sum = 0;
-    for (uint16_t i = 0; i < kSamples; ++i)
+    for (int i = 0; i < kSamples; ++i)
     {
-        sum += static_cast<uint32_t>(analogRead(kPotPin));
+        const int raw = analogRead(kPotPin);
+        if (raw < 0 || raw > ArduinoAnalogRead::kFullScale ||
+            static_cast<unsigned long>(raw) > 65535UL)
+        {
+            Serial.println("Acquisition failed or exceeded the ADC range; restart calibration.");
+            return false;
+        }
+        sum += static_cast<uint32_t>(raw);
         delay(kSampleDelayMs);
     }
-    return static_cast<uint16_t>(sum / kSamples);
+    average = static_cast<uint16_t>(sum / kSamples);
+    return true;
 }
 
-static void printResult(const PotIO::PotCalib &calib)
+static void printResult(const PotCalib &calib)
 {
     Serial.println();
     Serial.println("Copy this line into your sketch:");
-    Serial.print("PotIO::PotCalib calib{");
+    Serial.print("PotCalib calib{");
     Serial.print(calib.min);
     Serial.print(", ");
     Serial.print(calib.center);
@@ -98,21 +112,30 @@ void setup()
     Serial.println("This example intentionally avoids ESP32-specific ADC details.");
 
     waitForEnter("Step 1: move the pot to its minimum end stop.");
-    const uint16_t minValue = readAverage();
+    // Raw calibration storage uses 16-bit ADC counts.
+    uint16_t minValue = 0;
+    if (!readAverage(minValue))
+        return;
     Serial.print("min = ");
     Serial.println(minValue);
 
     waitForEnter("Step 2: move the pot to its physical center.");
-    const uint16_t centerValue = readAverage();
+    // Raw calibration storage uses 16-bit ADC counts.
+    uint16_t centerValue = 0;
+    if (!readAverage(centerValue))
+        return;
     Serial.print("center = ");
     Serial.println(centerValue);
 
     waitForEnter("Step 3: move the pot to its maximum end stop.");
-    const uint16_t maxValue = readAverage();
+    // Raw calibration storage uses 16-bit ADC counts.
+    uint16_t maxValue = 0;
+    if (!readAverage(maxValue))
+        return;
     Serial.print("max = ");
     Serial.println(maxValue);
 
-    const PotIO::PotCalib calib{minValue, centerValue, maxValue};
+    const PotCalib calib{minValue, centerValue, maxValue};
     printResult(calib);
 
     if (!calib.valid_centered())

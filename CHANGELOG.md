@@ -2,6 +2,8 @@
 
 All notable PotIO changes are documented here.
 
+## [Unreleased]
+
 ## [1.1.0] - 2026-09-01
 
 ### Fixed
@@ -38,7 +40,7 @@ All notable PotIO changes are documented here.
 - `RollingJitterStats<Window>` with `JitterStats` as the 32-sample default.
 - Dedicated native tests, example syntax checks, portable compile smoke test, release-contract checks, and GitHub Actions compile matrix.
 - `test/run_host_checks.sh` as one local command for the complete host-side validation suite.
-- Standardized LMB README/package/Doxygen structure and a dedicated beginner's guide.
+- Standardized README, package, and source-documentation structure and a dedicated beginner's guide.
 
 ### Changed
 
@@ -46,7 +48,7 @@ All notable PotIO changes are documented here.
 - Runtime calibration changes re-seed affected processing state rather than mixing old and new coordinate systems.
 - Uncalibrated ESP32 millivolt factories now seed a calibration matching `FullScaleMv`.
 - `JitterStats` now measures a recent rolling window rather than lifetime min/max.
-- Legacy `platformio.ci.ini` replaced by the test/CI structure used by newer LMB libraries.
+- Legacy `platformio.ci.ini` replaced by the current test and CI configuration.
 
 ## [1.0.0] - 2026-06-02
 

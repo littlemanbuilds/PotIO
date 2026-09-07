@@ -3,6 +3,7 @@
  *
  * @file 01_LinearPotBasic.ino
  * @brief Read one potentiometer and print beginner-friendly normalized values.
+ *
  * @author Little Man Builds (Darren Osborne)
  * @date 2026-06-02
  * @copyright Copyright © 2026 Little Man Builds
@@ -21,20 +22,22 @@
 #include <PotIO.h>
 #include <Arduino.h>
 
+using namespace PotIO;
+
 // Little Man Builds projects currently develop on the ESP32-S3 DevKitC-1.
 // GPIO4 is used here because it is a simple ADC-capable example pin on
 // ESP32-S3 boards. If your board routes ADC differently, change this pin.
 #if defined(ARDUINO_ARCH_ESP32)
-static constexpr uint8_t kPotPin = 4;
+static constexpr int kPotPin = 4;
 #else
-static constexpr uint8_t kPotPin = A0;
+static constexpr int kPotPin = A0;
 #endif
 
 // The factory creates a LinearPot using Arduino analogRead().
 // By default PotIO assumes ESP32-style 12-bit ADC on ESP32 and 10-bit ADC on
 // classic Arduino boards. If your board uses a different ADC resolution, define
 // POTIO_ARDUINO_ADC_FULLSCALE before including PotIO.h or use a custom reader.
-auto pot = PotIO::makePotAnalog(kPotPin);
+auto pot = makePotAnalog(kPotPin);
 
 void setup()
 {
@@ -55,7 +58,7 @@ void loop()
     const auto s = pot.state();
     if (!s.status.valid)
     {
-        Serial.println("sample invalid - holding the last good output");
+        Serial.println("sample invalid - output unavailable; previous values retained");
         delay(20);
         return;
     }

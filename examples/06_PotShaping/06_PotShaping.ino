@@ -3,13 +3,14 @@
  *
  * @file 06_PotShaping.ino
  * @brief Compare two response curves for analog controls.
+ *
  * @author Little Man Builds (Darren Osborne)
  * @date 2026-06-02
  * @copyright Copyright © 2026 Little Man Builds
  *
  * Shaping changes the feel of a control after it has been calibrated and
- * centered. It is useful when you want finer control near center without losing
- * full travel near the edges.
+ * centered. Cubic expo reduces sensitivity near center for finer control; the
+ * tanh curve increases center sensitivity and flattens toward the edges.
  *
  * This example uses two ADC pins so you can compare two pots side-by-side. If
  * you only have one pot, wire the same wiper to both example pins or change both
@@ -20,33 +21,35 @@
 
 #include <Arduino.h>
 
+using namespace PotIO;
+
 #if defined(ARDUINO_ARCH_ESP32)
 // GPIO4/GPIO5 are used here because they are simple ADC-capable example pins
 // on ESP32-S3 boards. If your board routes ADC differently, change these pins.
-static constexpr uint8_t kPinExpo = 4;
-static constexpr uint8_t kPinSoft = 5;
+static constexpr int kPinExpo = 4;
+static constexpr int kPinSoft = 5;
 #elif defined(ARDUINO_ARCH_ESP8266)
-static constexpr uint8_t kPinExpo = A0;
-static constexpr uint8_t kPinSoft = A0; // Compare two curves on the same ADC input.
+static constexpr int kPinExpo = A0;
+static constexpr int kPinSoft = A0; // Compare two curves on the same ADC input.
 #else
-static constexpr uint8_t kPinExpo = A0;
-static constexpr uint8_t kPinSoft = A1;
+static constexpr int kPinExpo = A0;
+static constexpr int kPinSoft = A1;
 #endif
 
-using ExpoPot = PotIO::LinearPot<PotIO::ArduinoAnalogRead,
-                                 PotIO::EMAFilter,
-                                 PotIO::SlewRate,
-                                 PotIO::ShapeCubicExpo>;
+using ExpoPot = LinearPot<ArduinoAnalogRead,
+                                 EMAFilter,
+                                 SlewRate,
+                                 ShapeCubicExpo>;
 
-using SoftPot = PotIO::LinearPot<PotIO::ArduinoAnalogRead,
-                                 PotIO::EMAFilter,
-                                 PotIO::SlewRate,
-                                 PotIO::ShapeSoftZone>;
+using SoftPot = LinearPot<ArduinoAnalogRead,
+                                 EMAFilter,
+                                 SlewRate,
+                                 ShapeSoftZone>;
 
 static ExpoPot makeExpoPot(uint8_t pin)
 {
-    typename ExpoPot::Config cfg;
-    cfg.reader = PotIO::ArduinoAnalogRead(pin);
+    ExpoPot::Config cfg;
+    cfg.reader = ArduinoAnalogRead(pin);
 
     // Lower alpha smooths more. Higher alpha follows faster.
     cfg.filter.alpha = 0.12f;
@@ -62,12 +65,12 @@ static ExpoPot makeExpoPot(uint8_t pin)
 
 static SoftPot makeSoftPot(uint8_t pin)
 {
-    typename SoftPot::Config cfg;
-    cfg.reader = PotIO::ArduinoAnalogRead(pin);
+    SoftPot::Config cfg;
+    cfg.reader = ArduinoAnalogRead(pin);
     cfg.filter.alpha = 0.12f;
     cfg.rate.units_per_s = 3.0f;
 
-    // Soft-zone keeps the middle gentle and progressively strengthens the edges.
+    // Soft-zone increases sensitivity near center and flattens toward the edges.
     cfg.shape.k = 4.0f;
 
     return SoftPot(cfg);
@@ -99,7 +102,7 @@ void loop()
 
     if (!potExpo.valid() || !potSoft.valid())
     {
-        Serial.println("sample invalid - holding the last good output");
+        Serial.println("sample invalid - output unavailable; previous values retained");
         delay(20);
         return;
     }

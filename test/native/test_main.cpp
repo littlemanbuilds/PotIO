@@ -132,6 +132,81 @@ static void test_out_of_range_is_invalid()
     CHECK(!pot.state().status.has_value);
 }
 
+// Constant readers exercise construction without setConfig() masking cache state.
+template <int FullScale, int Sample>
+struct FixedRangeReader
+{
+    static constexpr int kFullScale = FullScale;
+    int operator()() const noexcept { return Sample; }
+};
+
+template <typename Device>
+static void check_construction_validity(Device &defaultDevice, Device &configuredDevice,
+                                        PotIO::ReadError expected)
+{
+    defaultDevice.update(1u, 0.01f);
+    configuredDevice.update(1u, 0.01f);
+    CHECK(defaultDevice.valid() == (expected == PotIO::ReadError::None));
+    CHECK(defaultDevice.state().status.error == expected);
+    CHECK(configuredDevice.valid() == defaultDevice.valid());
+    CHECK(configuredDevice.state().status.error == expected);
+    CHECK(configuredDevice.state().status.has_value == defaultDevice.state().status.has_value);
+}
+
+template <typename Device>
+static void check_single_axis_construction(int expectedScale, PotIO::ReadError expected)
+{
+    Device defaultDevice;
+    const typename Device::Config cfg{};
+    Device configuredDevice(cfg);
+    CHECK(defaultDevice.fullScale() == expectedScale);
+    CHECK(configuredDevice.fullScale() == expectedScale);
+    check_construction_validity(defaultDevice, configuredDevice, expected);
+}
+
+template <int FullScale, int Sample>
+static void check_single_axis_readers(PotIO::ReadError expected)
+{
+    using Reader = FixedRangeReader<FullScale, Sample>;
+    const int expectedScale = FullScale > 0 ? FullScale : 1;
+    check_single_axis_construction<PotIO::LinearPot<Reader>>(expectedScale, expected);
+    check_single_axis_construction<PotIO::ContinuousPot<Reader>>(expectedScale, expected);
+    check_single_axis_construction<PotIO::SteppedPot<5u, Reader>>(expectedScale, expected);
+}
+
+template <int ScaleX, int SampleX, int ScaleY, int SampleY>
+static void check_joystick_construction(PotIO::ReadError expected)
+{
+    using Joystick = PotIO::Joystick2D<FixedRangeReader<ScaleX, SampleX>, FixedRangeReader<ScaleY, SampleY>>;
+    Joystick defaultDevice;
+    const typename Joystick::Config cfg{};
+    Joystick configuredDevice(cfg);
+    CHECK(defaultDevice.fullScaleX() == (ScaleX > 0 ? ScaleX : 1));
+    CHECK(defaultDevice.fullScaleY() == (ScaleY > 0 ? ScaleY : 1));
+    CHECK(configuredDevice.fullScaleX() == defaultDevice.fullScaleX());
+    CHECK(configuredDevice.fullScaleY() == defaultDevice.fullScaleY());
+    check_construction_validity(defaultDevice, configuredDevice, expected);
+}
+
+static void test_default_construction_reader_ranges()
+{
+    MiniTest::begin("default and Config construction honor declared reader ranges");
+    check_single_axis_readers<100, 50>(PotIO::ReadError::None);
+    check_single_axis_readers<100, 100>(PotIO::ReadError::None);
+    check_single_axis_readers<100, 101>(PotIO::ReadError::OutOfRange);
+    check_single_axis_readers<0, 0>(PotIO::ReadError::InvalidConfiguration);
+    check_single_axis_readers<-100, 0>(PotIO::ReadError::InvalidConfiguration);
+    // Distinct axis ranges detect accidental sharing or omission of either cache.
+    check_joystick_construction<100, 50, 200, 100>(PotIO::ReadError::None);
+    check_joystick_construction<100, 100, 200, 200>(PotIO::ReadError::None);
+    check_joystick_construction<100, 101, 200, 100>(PotIO::ReadError::OutOfRange);
+    check_joystick_construction<100, 50, 200, 201>(PotIO::ReadError::OutOfRange);
+    check_joystick_construction<0, 0, 200, 100>(PotIO::ReadError::InvalidConfiguration);
+    check_joystick_construction<-100, 0, 200, 100>(PotIO::ReadError::InvalidConfiguration);
+    check_joystick_construction<100, 50, 0, 0>(PotIO::ReadError::InvalidConfiguration);
+    check_joystick_construction<100, 50, -200, 0>(PotIO::ReadError::InvalidConfiguration);
+}
+
 static void test_calibration_policies()
 {
     MiniTest::begin("permissive and strict calibration policies");
@@ -691,6 +766,7 @@ int main()
     test_failed_read_retains_last_good();
     test_explicit_reader_failure();
     test_out_of_range_is_invalid();
+    test_default_construction_reader_ranges();
     test_calibration_policies();
     test_calibration_bounds_and_span();
     test_calibration_mapping_boundaries();

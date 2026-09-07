@@ -3,6 +3,7 @@
  *
  * @file 08_SteppedPotModeKnob.ino
  * @brief Convert one potentiometer into a stable 5-position mode knob.
+ *
  * @author Little Man Builds (Darren Osborne)
  * @date 2026-06-02
  * @copyright Copyright © 2026 Little Man Builds
@@ -18,18 +19,20 @@
 
 #include <Arduino.h>
 
+using namespace PotIO;
+
 #if defined(ARDUINO_ARCH_ESP32)
 // GPIO4 is used here because it is a simple ADC-capable example pin on
 // ESP32-S3 boards. If your board routes ADC differently, change this pin.
-static constexpr uint8_t kPotPin = 4;
+static constexpr int kPotPin = 4;
 #else
-static constexpr uint8_t kPotPin = A0;
+static constexpr int kPotPin = A0;
 #endif
 
 // Five stable positions: 0, 1, 2, 3, 4.
-auto modeKnob = PotIO::makeSteppedPot<5>(kPotPin);
+auto modeKnob = makeSteppedPot<5>(kPotPin);
 
-static const char *modeName(uint8_t step)
+static const char *modeName(int step)
 {
     switch (step)
     {
@@ -65,7 +68,7 @@ void loop()
     const auto s = modeKnob.state();
     if (!s.status.valid)
     {
-        Serial.println("sample invalid - holding the last mode");
+        Serial.println("sample invalid - mode unavailable");
         delay(20);
         return;
     }

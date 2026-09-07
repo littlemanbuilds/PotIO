@@ -27,7 +27,7 @@ namespace PotIO
      * @brief Sticky, throttle-like feel.
      *
      * @param ema_alpha EMA coefficient (0,1]. Smaller -> smoother.
-     * @param soft_k Soft-zone steepness. Larger -> steeper ends.
+     * @param soft_k Tanh gain. Larger values increase center sensitivity and flatten the response near the endpoints.
      * @param wrap_hyst Hysteresis near 0/1 to avoid false wraps.
      * @return ContinuousPot config for a sticky knob preset.
      *

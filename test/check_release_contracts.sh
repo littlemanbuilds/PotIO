@@ -82,14 +82,14 @@ require(readme.endswith("""## License
 
 PotIO is released under the **MIT License**. See [LICENSE](LICENSE).
 
-Copyright © 2026 Little Man Builds (Darren Osborne).
-"""), 'README final license tail does not match the public LMB contract')
+Copyright © 2026 Darren Osborne.
+"""), 'README final license tail does not match the documented license contract')
 require('development baseline' not in readme, 'README must describe the v1.1.0 release candidate, not a development baseline')
 beginner = readme.split("## Beginner's guide", 1)[1]
 require('```cpp\n#include <PotIO.h>\n#include <Arduino.h>\n' in beginner,
         'README beginner snippet must include PotIO.h before Arduino.h')
 
-# Public LMB source/example header contract.
+# Source and example documentation header checks.
 for path in sorted((root / 'src').rglob('*.h')) + sorted((root / 'examples').glob('*/*.ino')):
     text = path.read_text()
     rel = str(path.relative_to(root))
@@ -120,7 +120,7 @@ require('class RollingJitterStats' in jitter, 'rolling jitter implementation mis
 
 # Legacy CI and tracked/generated package debris must not return.
 require(not (root / 'platformio.ci.ini').exists(), 'legacy platformio.ci.ini must not be packaged')
-require(not (root / 'prepare_potio_v1_1_0.sh').exists(), 'private pre-harness preparation script must not be packaged')
+require(not (root / 'prepare_potio_v1_1_0.sh').exists(), 'obsolete preparation script must not be packaged')
 import subprocess
 import tempfile
 
@@ -180,5 +180,5 @@ if errors:
     for error in errors:
         print('ERROR:', error)
     sys.exit(1)
-print('Release contracts passed: version, manifests, documentation, LMB headers, remediation markers, and package hygiene.')
+print('Release contracts passed: version, manifests, documentation headers, remediation markers, and package hygiene.')
 PY

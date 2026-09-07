@@ -62,22 +62,39 @@ namespace PotIO
 
         using Frame = State; ///< POD-style latest-state frame.
 
-        LinearPot() = default;
+        /**
+         * @brief Construct an unseeded device with default configuration and cache its reader range.
+         */
+        LinearPot() noexcept(noexcept(Config{})) { precompute_(); }
 
-        /** @brief Construct with configuration. */
+        /**
+         * @brief Copy configuration into an unseeded device.
+         *
+         * @param c Configuration; validity is checked during update().
+         */
         explicit LinearPot(const Config &c) : cfg_(c) { precompute_(); }
 
-        /** @brief Inject a custom millisecond time source. */
+        /**
+         * @brief Select the clock used by update().
+         *
+         * @param fn Millisecond clock, or nullptr for Arduino millis() (zero on a host).
+         */
         void setTimeSource(TimeFn fn) noexcept { time_fn_ = fn; }
 
         /** @brief Update using the configured/default time source. */
         void update() noexcept { update(detail::time_now_ms(time_fn_)); }
 
-        /** @brief Update using an external timestamp with wrap-safe internal dt. */
+        /**
+         * @brief Update using elapsed time since the preceding timestamp-only call.
+         *
+         * @param now_ms Current millisecond tick; first call uses zero elapsed time.
+         * @note The attempt clock advances even on failure. Explicit-dt calls do not advance it.
+         */
         void update(uint32_t now_ms) noexcept { update(now_ms, dt_.step(now_ms)); }
 
         /**
          * @brief Acquire and process one sample.
+         *
          * @param now_ms Current timestamp in milliseconds.
          * @param dt_s Elapsed time in seconds.
          */
@@ -152,23 +169,44 @@ namespace PotIO
             detail::mark_success(st_.status, now_ms, calibration_ok, quality);
         }
 
-        /** @brief Get the latest state. */
+        /**
+         * @brief Get a reference to the latest state.
+         *
+         * @return Internal state, changed by subsequent updates or resets; check status.valid for freshness.
+         */
         POTIO_NODISCARD const State &state() const noexcept { return st_; }
 
-        /** @brief Get a copy of the latest state. */
+        /**
+         * @brief Copy the latest state for application-owned storage.
+         *
+         * @return State snapshot including validity and retained values; concurrent access requires synchronization.
+         */
         POTIO_NODISCARD Frame frame() const noexcept { return st_; }
 
-        /** @brief True when the latest update produced fresh valid data. */
+        /**
+         * @brief Check whether the latest update produced usable data.
+         *
+         * @return True for a successful latest update, false initially or after failure.
+         */
         POTIO_NODISCARD bool valid() const noexcept { return st_.status.valid; }
 
-        /** @brief Get the calibrated [0,1] value. */
+        /**
+         * @brief Get the calibrated [0,1] value.
+         *
+         * @return Retained calibrated value in [0,1]; check valid() before use as fresh input.
+         */
         POTIO_NODISCARD float calib01() const noexcept { return st_.calib01; }
 
-        /** @brief Get the final centered [-1,1] value. */
+        /**
+         * @brief Get the final centered [-1,1] value.
+         *
+         * @return Retained shaped, filtered and rate-limited output in [-1,1]; check valid().
+         */
         POTIO_NODISCARD float centered() const noexcept { return st_.centered; }
 
         /**
          * @brief Replace configuration.
+         *
          * @param c New configuration bundle.
          * @param reset_state Clear public state as well as processing history.
          *
@@ -196,10 +234,18 @@ namespace PotIO
             reset_processing_();
         }
 
-        /** @brief Get the reader full-scale used for normalization. */
+        /**
+         * @brief Get the reader full-scale used for normalization.
+         *
+         * @return Positive reader maximum, or one when the declaration is invalid; update() rejects that configuration.
+         */
         POTIO_NODISCARD int fullScale() const noexcept { return adc_full_scale_; }
 
     private:
+        /**
+         * @brief Cache the reader range, substituting one for an invalid declaration.
+         * Invalid declarations still cause update() to reject the configuration.
+         */
         void precompute_() noexcept
         {
             const int declared = detail::FullScale<Reader>::value;
@@ -208,6 +254,11 @@ namespace PotIO
             adc_full_scale_inv_ = 1.0f / static_cast<float>(adc_full_scale_);
         }
 
+        /**
+         * @brief Validate device settings and available policy validation hooks.
+         *
+         * @return InvalidConfiguration for unusable settings, otherwise None; calibration is checked separately.
+         */
         ReadError validate_config_() const noexcept
         {
             if (!full_scale_valid_ || cfg_.min_calibration_span == 0u)
@@ -222,6 +273,13 @@ namespace PotIO
             return ReadError::None;
         }
 
+        /**
+         * @brief Mark this attempt invalid and apply the selected history recovery policy.
+         *
+         * @param error Failure reason.
+         * @param calibration_ok Whether configured calibration is usable.
+         * @param quality Quality flags for this attempt.
+         */
         void fail_(ReadError error, bool calibration_ok, uint16_t quality) noexcept
         {
             detail::mark_failure(st_.status, error, calibration_ok, quality);
@@ -229,6 +287,10 @@ namespace PotIO
                 reset_processing_();
         }
 
+        /**
+         * @brief Discard filter history so the next accepted input seeds processing.
+         * Public output and the attempt clock are retained.
+         */
         void reset_processing_() noexcept
         {
             filtered_centered_ = 0.0f;

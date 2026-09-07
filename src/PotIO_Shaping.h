@@ -19,13 +19,18 @@ namespace PotIO
     struct ShapeIdentity
     {
         /**
- * @brief Validate configuration.
- *
- * @return Always true.
- */
+         * @brief Validate configuration.
+         *
+         * @return Always true.
+         */
         bool valid() const noexcept { return true; }
 
-        /** @brief Apply identity shaping. */
+        /**
+         * @brief Pass through an input without shaping.
+         *
+         * @param x Input value.
+         * @return x unchanged.
+         */
         float operator()(float x) const noexcept { return x; }
     };
 
@@ -34,13 +39,22 @@ namespace PotIO
     {
         float a{0.7f}; ///< Blend factor in [0,1]. 0=cubic, 1=linear.
 
-        /** @brief Validate the blend factor. */
+        /**
+         * @brief Validate the blend factor.
+         *
+         * @return True for finite a in [0,1].
+         */
         bool valid() const noexcept
         {
             return isfinite(a) != 0 && a >= 0.0f && a <= 1.0f;
         }
 
-        /** @brief Apply cubic/expo shaping. */
+        /**
+         * @brief Blend cubic and linear response without clamping the input.
+         *
+         * @param x Centered input, normally in [-1,1].
+         * @return Shaped value, or x when a is invalid.
+         */
         float operator()(float x) const noexcept
         {
             if (!valid())
@@ -49,18 +63,27 @@ namespace PotIO
         }
     };
 
-    /** @brief Normalized tanh response with a gentle center region. */
+    /** @brief Normalized tanh response with increased center sensitivity and flattening near the endpoints. */
     struct ShapeSoftZone
     {
         float k{3.0f}; ///< Gain; must be finite and >= 1.
 
-        /** @brief Validate the configured gain. */
+        /**
+         * @brief Validate the configured gain.
+         *
+         * @return True for finite k at least one.
+         */
         bool valid() const noexcept
         {
             return isfinite(k) != 0 && k >= 1.0f;
         }
 
-        /** @brief Apply soft-zone shaping. */
+        /**
+         * @brief Apply normalized tanh response without clamping the input.
+         *
+         * @param x Centered input, normally in [-1,1].
+         * @return Shaped value, or x when k is invalid.
+         */
         float operator()(float x) const noexcept
         {
             if (!valid())

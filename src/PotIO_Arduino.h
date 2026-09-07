@@ -38,12 +38,14 @@ namespace PotIO
 
         /**
          * @brief Construct an Arduino analog reader for one pin.
+         *
          * @param p ADC pin in Arduino numbering.
          */
         explicit ArduinoAnalogRead(uint8_t p = 0) noexcept : pin(p) {}
 
         /**
          * @brief Perform a raw ADC read.
+         *
          * @return int Raw ADC value.
          */
         int operator()() const noexcept
@@ -74,12 +76,14 @@ namespace PotIO
 
         /**
          * @brief Construct an ESP32 millivolt reader for one pin.
+         *
          * @param p ADC pin in Arduino numbering.
          */
         explicit ArduinoAnalogReadMilliVolts(uint8_t p = 0) noexcept : pin(p) {}
 
         /**
          * @brief Perform an ADC read in millivolts.
+         *
          * @return int ADC value in mV.
          */
         int operator()() const noexcept
@@ -91,6 +95,7 @@ namespace PotIO
 
     /**
      * @brief Set ESP32 ADC pin attenuation (Arduino core; no-op elsewhere).
+     *
      * @param pin ADC pin.
      * @param attn_db Attenuation in dB (0, 3, 6, 11 typical).
      */

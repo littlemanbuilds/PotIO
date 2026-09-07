@@ -28,10 +28,20 @@ namespace PotIO
     static constexpr float kRad2Deg = 57.29577951308232f;    ///< Radians-to-degrees scale.
     static constexpr float kDeg2Rad = 0.017453292519943295f; ///< Degrees-to-radians scale.
 
-    /** @brief Convert radians to degrees. */
+    /**
+     * @brief Convert radians to degrees.
+     *
+     * @param r Angle in radians.
+     * @return Angle in degrees; non-finite inputs propagate.
+     */
     inline float rad2deg(float r) noexcept { return r * kRad2Deg; }
 
-    /** @brief Convert degrees to radians. */
+    /**
+     * @brief Convert degrees to radians.
+     *
+     * @param d Angle in degrees.
+     * @return Angle in radians; non-finite inputs propagate.
+     */
     inline float deg2rad(float d) noexcept { return d * kDeg2Rad; }
 
     /**
@@ -73,7 +83,12 @@ namespace PotIO
         bool valid{false};                    ///< True when `raw` is a real sample.
         ReadError error{ReadError::NoSample}; ///< Failure reason when `valid == false`.
 
-        /** @brief Create a valid raw sample. */
+        /**
+         * @brief Create a successful acquisition result without range validation.
+         *
+         * @param value Acquired ADC value; the device subsequently checks its reader range.
+         * @return Sample marked valid with no error.
+         */
         static RawSample success(int value) noexcept
         {
             RawSample s;
@@ -83,7 +98,12 @@ namespace PotIO
             return s;
         }
 
-        /** @brief Create a failed raw sample. */
+        /**
+         * @brief Create a failed acquisition result.
+         *
+         * @param reason Failure reason; None is converted to ReaderFailure.
+         * @return Invalid sample with raw zero as a placeholder, never a measured zero.
+         */
         static RawSample failure(ReadError reason = ReadError::ReaderFailure) noexcept
         {
             RawSample s;
@@ -122,16 +142,33 @@ namespace PotIO
         uint16_t center{static_cast<uint16_t>(POTIO_DEFAULT_FULLSCALE / 2)}; ///< Raw physical center.
         uint16_t max{static_cast<uint16_t>(POTIO_DEFAULT_FULLSCALE)};        ///< Raw maximum value.
 
+        /**
+         * @brief Initialize calibration from POTIO_DEFAULT_FULLSCALE.
+         */
         PotCalib() = default;
 
-        /** @brief Construct calibration from observed endpoints and center. */
+        /**
+         * @brief Store observed calibration values without validating them.
+         *
+         * @param min_ Raw lower endpoint.
+         * @param center_ Raw physical center.
+         * @param max_ Raw upper endpoint.
+         */
         PotCalib(uint16_t min_, uint16_t center_, uint16_t max_) noexcept
             : min{min_}, center{center_}, max{max_} {}
 
-        /** @brief True when the endpoint range is ordered. */
+        /**
+         * @brief Check endpoint ordering alone.
+         *
+         * @return True when max exceeds min; center and reader range are not checked.
+         */
         POTIO_NODISCARD bool valid() const noexcept { return max > min; }
 
-        /** @brief True when min, center, and max are strictly ordered. */
+        /**
+         * @brief Check centered calibration ordering.
+         *
+         * @return True when min < center < max; reader range is not checked.
+         */
         POTIO_NODISCARD bool valid_centered() const noexcept
         {
             return (max > center) && (center > min);
@@ -139,6 +176,7 @@ namespace PotIO
 
         /**
          * @brief Validate centered calibration against a reader full-scale.
+         *
          * @param fullscale Maximum valid raw value from the reader.
          * @param min_span Minimum raw units required on each side of center.
          * @return true when the calibration is ordered, in range, and has useful span.
@@ -195,10 +233,20 @@ namespace PotIO
         SquareToCircle  ///< Map the square axis domain smoothly into a unit circle.
     };
 
-    /** @brief Clamp a value to [0,1]. */
+    /**
+     * @brief Clamp a value to [0,1].
+     *
+     * @param v Value to bound.
+     * @return Bounded value; NaN passes through and must be rejected by the caller.
+     */
     inline float clamp01(float v) noexcept { return v < 0.f ? 0.f : (v > 1.f ? 1.f : v); }
 
-    /** @brief Clamp a value to [-1,1]. */
+    /**
+     * @brief Clamp a value to [-1,1].
+     *
+     * @param v Value to bound.
+     * @return Bounded value; NaN passes through and must be rejected by the caller.
+     */
     inline float clamp11(float v) noexcept { return v < -1.f ? -1.f : (v > 1.f ? 1.f : v); }
 
 } ///< namespace PotIO

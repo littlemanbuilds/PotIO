@@ -3,6 +3,7 @@
  *
  * @file 03_ContinuousPotAdvanced.ino
  * @brief Use a cyclic analog knob with phase, wrap tracking, and unwrapped angle.
+ *
  * @author Little Man Builds (Darren Osborne)
  * @date 2026-06-02
  * @copyright Copyright © 2026 Little Man Builds
@@ -17,19 +18,22 @@
 
 #include <Arduino.h>
 
+using namespace PotIO;
+
 #if defined(ARDUINO_ARCH_ESP32)
 // GPIO4 is used here because it is a simple ADC-capable example pin on
 // ESP32-S3 boards. If your board routes ADC differently, change this pin.
-static constexpr uint8_t kPotPin = 4;
+static constexpr int kPotPin = 4;
 #else
-static constexpr uint8_t kPotPin = A0;
+static constexpr int kPotPin = A0;
 #endif
 
 // Sticky is a friendly preset: a little smoothing and a soft response curve.
 // Other presets are shown in setup() so the beginner can discover them without
 // turning the first line into template soup.
-auto knob = PotIO::makeKnobSticky(kPotPin);
+auto knob = makeKnobSticky(kPotPin);
 
+// Match the signed 32-bit turn counter stored in the device state.
 static int32_t lastTurns = 0;
 
 void setup()
@@ -42,8 +46,8 @@ void setup()
     Serial.println("Watch phase, turns, and unwrapped angle.");
     Serial.println();
     Serial.println("Other useful presets:");
-    Serial.println("  PotIO::makeKnobSmooth(pin)");
-    Serial.println("  PotIO::makeKnobJog(pin)");
+    Serial.println("  makeKnobSmooth(pin)");
+    Serial.println("  makeKnobJog(pin)");
 }
 
 void loop()
@@ -53,19 +57,19 @@ void loop()
 
     if (!s.status.valid)
     {
-        Serial.println("sample invalid - holding the last good output");
+        Serial.println("sample invalid - output unavailable; previous values retained");
 
         // A discontinuity means PotIO can no longer prove the turn count. This
         // demo re-arms from the last known count; a real machine may need to
         // re-home or restore a known reference instead.
-        if (s.status.error == PotIO::ReadError::Discontinuity)
+        if (s.status.error == ReadError::Discontinuity)
             knob.resynchronizeTurns(s.turns);
 
         delay(20);
         return;
     }
 
-    const int32_t turns = static_cast<int32_t>(knob.turns_raw());
+    const int32_t turns = s.turns;
     if (turns != lastTurns)
     {
         Serial.print("wrap detected: ");

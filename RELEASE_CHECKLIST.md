@@ -7,7 +7,7 @@ Use this checklist before creating a PotIO release archive or registry submissio
 - [ ] `POTIO_VERSION`, `library.properties`, and `library.json` match.
 - [ ] Only `POTIO_VERSION*` package-specific version macros are exposed; generic `LIBRARY_VERSION*` aliases remain absent.
 - [ ] Public API remains C++11 compatible.
-- [ ] Public source files retain the LMB Doxygen header style.
+- [ ] Public source files retain complete Doxygen documentation headers.
 - [ ] No accidental dependency on another LMB library is introduced.
 - [ ] Reader failure retains last-good output and reports invalid status.
 - [ ] Calibration/timing/configuration errors cannot become plausible fresh commands.

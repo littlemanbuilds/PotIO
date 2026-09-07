@@ -3,6 +3,7 @@
  *
  * @file 04_Joystick2DKY023.ino
  * @brief Read a KY-023 style analog joystick with a radial scaled deadzone.
+ *
  * @author Little Man Builds (Darren Osborne)
  * @date 2026-06-02
  * @copyright Copyright © 2026 Little Man Builds
@@ -16,22 +17,24 @@
 
 #include <Arduino.h>
 
+using namespace PotIO;
+
 #if defined(ARDUINO_ARCH_ESP32)
 // GPIO4/GPIO5 are used here because they are simple ADC-capable example pins
 // on ESP32-S3 boards. If your board routes ADC differently, change these pins.
-static constexpr uint8_t kPinX = 4;
-static constexpr uint8_t kPinY = 5;
+static constexpr int kPinX = 4;
+static constexpr int kPinY = 5;
 #elif defined(ARDUINO_ARCH_ESP8266)
-static constexpr uint8_t kPinX = A0;
-static constexpr uint8_t kPinY = A0; // Compile fallback only; most ESP8266 boards expose one ADC pin.
+static constexpr int kPinX = A0;
+static constexpr int kPinY = A0; // Compile fallback only; most ESP8266 boards expose one ADC pin.
 #else
-static constexpr uint8_t kPinX = A0;
-static constexpr uint8_t kPinY = A1;
+static constexpr int kPinX = A0;
+static constexpr int kPinY = A1;
 #endif
 
 // RadialScaled means: ignore the small center wobble, then scale the remaining
 // movement so the joystick can still reach full output near the edge.
-auto joystick = PotIO::makeJoystickKY023<>(kPinX, kPinY, PotIO::Deadzone::RadialScaled, 0.12f);
+auto joystick = makeJoystickKY023<>(kPinX, kPinY, Deadzone::RadialScaled, 0.12f);
 
 void setup()
 {
@@ -53,7 +56,7 @@ void loop()
     const auto s = joystick.state();
     if (!s.status.valid)
     {
-        Serial.println("joystick sample invalid - holding the last good output");
+        Serial.println("joystick sample invalid - output unavailable; previous values retained");
         delay(20);
         return;
     }

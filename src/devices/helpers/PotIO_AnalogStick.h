@@ -52,6 +52,7 @@ namespace PotIO
 
         /**
          * @brief Inject a custom time source for the underlying joystick.
+         *
          * @param fn Optional function returning current milliseconds.
          */
         void setTimeSource(TimeFn fn) noexcept { joy.setTimeSource(fn); }
@@ -63,12 +64,14 @@ namespace PotIO
 
         /**
          * @brief Update using an external timestamp.
+         *
          * @param now_ms Current timestamp in milliseconds.
          */
         void update(uint32_t now_ms) noexcept { joy.update(now_ms); }
 
         /**
          * @brief Update using explicit timestamp and elapsed time.
+         *
          * @param now_ms Current timestamp in milliseconds.
          * @param dt_s Elapsed time in seconds.
          */
@@ -81,35 +84,51 @@ namespace PotIO
 
         /**
          * @brief Get latest X-axis value.
+         *
          * @return X in [-1,1].
          */
         POTIO_NODISCARD float x() const noexcept { return joy.state().x; }
 
         /**
          * @brief Get latest Y-axis value.
+         *
          * @return Y in [-1,1].
          */
         POTIO_NODISCARD float y() const noexcept { return joy.state().y; }
 
         /**
          * @brief Get latest radial magnitude.
+         *
          * @return Magnitude in [0,1].
          */
         POTIO_NODISCARD float mag() const noexcept { return joy.state().mag; }
 
         /**
          * @brief Get latest joystick angle.
+         *
          * @return Angle in radians.
          */
         POTIO_NODISCARD float angle() const noexcept { return joy.state().angle; }
 
-        /** @brief True when the latest joystick update produced fresh valid data. */
+        /**
+         * @brief True when the latest joystick update produced fresh valid data.
+         *
+         * @return True when the underlying joystick latest update succeeded.
+         */
         POTIO_NODISCARD bool valid() const noexcept { return joy.valid(); }
 
-        /** @brief True when angle() is meaningful rather than neutral. */
+        /**
+         * @brief True when angle() is meaningful rather than neutral.
+         *
+         * @return True for a valid non-neutral joystick vector.
+         */
         POTIO_NODISCARD bool angleValid() const noexcept { return joy.angleValid(); }
 
-        /** @brief Get the complete latest joystick state and status. */
+        /**
+         * @brief Get the complete latest joystick state and status.
+         *
+         * @return Internal state reference; subsequent updates change it. Check status.valid for freshness.
+         */
         POTIO_NODISCARD const typename Joy::State &state() const noexcept { return joy.state(); }
     };
 

@@ -34,7 +34,11 @@ namespace PotIO
         static_assert(Window >= 2u, "RollingJitterStats window must be >= 2.");
 
     public:
-        /** @brief Observe one valid raw sample. */
+        /**
+         * @brief Append a raw sample, replacing the oldest when the window is full.
+         *
+         * @param value Successfully acquired raw ADC count.
+         */
         void observe(uint16_t value) noexcept
         {
             samples_[head_] = value;
@@ -50,13 +54,25 @@ namespace PotIO
             count_ = 0u;
         }
 
-        /** @brief Number of observations currently represented. */
+        /**
+         * @brief Get the number of retained observations.
+         *
+         * @return Populated entries, from zero through Window.
+         */
         POTIO_NODISCARD size_t count() const noexcept { return count_; }
 
-        /** @brief True once the window contains Window observations. */
+        /**
+         * @brief Check whether the rolling window is populated.
+         *
+         * @return True once Window samples have been observed since reset.
+         */
         POTIO_NODISCARD bool full() const noexcept { return count_ == Window; }
 
-        /** @brief Minimum recent value, or zero before the first observation. */
+        /**
+         * @brief Get the minimum retained raw sample.
+         *
+         * @return Minimum ADC count, or zero for an empty window.
+         */
         POTIO_NODISCARD uint16_t min_value() const noexcept
         {
             if (count_ == 0u)
@@ -70,7 +86,11 @@ namespace PotIO
             return value;
         }
 
-        /** @brief Maximum recent value, or zero before the first observation. */
+        /**
+         * @brief Get the maximum retained raw sample.
+         *
+         * @return Maximum ADC count, or zero for an empty window.
+         */
         POTIO_NODISCARD uint16_t max_value() const noexcept
         {
             if (count_ == 0u)
@@ -84,7 +104,11 @@ namespace PotIO
             return value;
         }
 
-        /** @brief Recent peak-to-peak jitter. */
+        /**
+         * @brief Measure peak-to-peak jitter over the retained window.
+         *
+         * @return Maximum minus minimum in raw counts, or zero with fewer than two samples.
+         */
         POTIO_NODISCARD uint16_t peak_to_peak() const noexcept
         {
             if (count_ < 2u)
@@ -111,6 +135,7 @@ namespace PotIO
 
     /**
      * @brief Suggest a deadzone fraction from recent peak-to-peak jitter.
+     *
      * @param jitter_pp Peak-to-peak jitter in raw units.
      * @param fullscale ADC full-scale.
      * @param safety_margin Extra raw-count margin.

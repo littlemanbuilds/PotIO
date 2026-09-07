@@ -70,21 +70,43 @@ namespace PotIO
 
         using Frame = State; ///< POD-style latest-state frame.
 
-        ContinuousPot() = default;
+        /**
+         * @brief Construct an unseeded device with default configuration and cache its reader range.
+         */
+        ContinuousPot() noexcept(noexcept(Config{})) { precompute_(); }
 
-        /** @brief Construct with configuration. */
+        /**
+         * @brief Copy configuration into an unseeded device.
+         *
+         * @param c Configuration; validity is checked during update().
+         */
         explicit ContinuousPot(const Config &c) : cfg_(c) { precompute_(); }
 
-        /** @brief Inject a custom millisecond time source. */
+        /**
+         * @brief Select the clock used by update().
+         *
+         * @param fn Millisecond clock, or nullptr for Arduino millis() (zero on a host).
+         */
         void setTimeSource(TimeFn fn) noexcept { time_fn_ = fn; }
 
         /** @brief Update using the configured/default time source. */
         void update() noexcept { update(detail::time_now_ms(time_fn_)); }
 
-        /** @brief Update using an external timestamp with wrap-safe internal dt. */
+        /**
+         * @brief Update using elapsed time since the preceding timestamp-only call.
+         *
+         * @param now_ms Current millisecond tick; first call uses zero elapsed time.
+         * @note The attempt clock advances even on failure. Explicit-dt calls do not advance it.
+         */
         void update(uint32_t now_ms) noexcept { update(now_ms, dt_.step(now_ms)); }
 
-        /** @brief Acquire and process one cyclic analog sample. */
+        /**
+         * @brief Acquire and process one cyclic analog sample.
+         *
+         * @param now_ms Current millisecond timestamp.
+         * @param dt_s Elapsed processing seconds, finite and in [0,max_dt_s].
+         * @note Does not advance the internal timestamp-only clock. Failure retains output values.
+         */
         void update(uint32_t now_ms, float dt_s) noexcept
         {
             st_.t_ms = now_ms;
@@ -165,50 +187,95 @@ namespace PotIO
             detail::mark_success(st_.status, now_ms, calibration_ok, quality);
         }
 
-        /** @brief Get the latest state. */
+        /**
+         * @brief Get a reference to the latest state.
+         *
+         * @return Internal state, changed by subsequent updates or resets; check status.valid for freshness.
+         */
         POTIO_NODISCARD const State &state() const noexcept { return st_; }
 
-        /** @brief Get a copy of the latest state. */
+        /**
+         * @brief Copy the latest state for application-owned storage.
+         *
+         * @return State snapshot including validity and retained values; concurrent access requires synchronization.
+         */
         POTIO_NODISCARD Frame frame() const noexcept { return st_; }
 
-        /** @brief True when the latest update produced fresh valid data. */
+        /**
+         * @brief Check whether the latest update produced usable data.
+         *
+         * @return True for a successful latest update, false initially or after failure.
+         */
         POTIO_NODISCARD bool valid() const noexcept { return st_.status.valid; }
 
-        /** @brief True when the accumulated turn count is unambiguous. */
+        /**
+         * @brief True when the accumulated turn count is unambiguous.
+         *
+         * @return Whether the last tracking status is unambiguous; also check valid() for fresh input.
+         */
         POTIO_NODISCARD bool turnsValid() const noexcept { return st_.turns_valid; }
 
-        /** @brief Total retained turns since synchronization. */
+        /**
+         * @brief Total retained turns since synchronization.
+         *
+         * @return Internal signed whole-turn count as float, excluding fractional phase; check valid() and turnsValid().
+         */
         POTIO_NODISCARD float turns_raw() const noexcept { return static_cast<float>(turns_); }
 
-        /** @brief Unwrapped angle in degrees. */
+        /**
+         * @brief Unwrapped angle in degrees.
+         *
+         * @return Internal whole turns plus retained phase, in degrees; check valid() and turnsValid().
+         */
         POTIO_NODISCARD float degrees_raw() const noexcept
         {
             return (static_cast<float>(turns_) + st_.phase01) * 360.0f;
         }
 
-        /** @brief Current normalized phase. */
+        /**
+         * @brief Current normalized phase.
+         *
+         * @return Retained phase in [0,1]; check valid() for freshness.
+         */
         POTIO_NODISCARD float phase01() const noexcept { return st_.phase01; }
 
-        /** @brief Current phase mapped to [-π,+π]. */
+        /**
+         * @brief Current phase mapped to [-π,+π].
+         *
+         * @return Retained phase in radians, with phase 0.5 mapped to zero; check valid().
+         */
         POTIO_NODISCARD float phaseRad() const noexcept
         {
             return (st_.phase01 * 2.0f - 1.0f) * kPi;
         }
 
-        /** @brief Current phase mapped to [-180,+180] degrees. */
+        /**
+         * @brief Current phase mapped to [-180,+180] degrees.
+         *
+         * @return Retained phase in degrees, with phase 0.5 mapped to zero; check valid().
+         */
         POTIO_NODISCARD float phaseDeg() const noexcept { return rad2deg(phaseRad()); }
 
-        /** @brief Unwrapped angle in radians. */
+        /**
+         * @brief Unwrapped angle in radians.
+         *
+         * @return Internal whole turns plus retained phase, scaled by 2*pi; check valid() and turnsValid().
+         */
         POTIO_NODISCARD float angleUnwrappedRad() const noexcept
         {
             return (static_cast<float>(turns_) + st_.phase01) * (2.0f * kPi);
         }
 
-        /** @brief Unwrapped angle in degrees. */
+        /**
+         * @brief Unwrapped angle in degrees.
+         *
+         * @return Internal whole turns plus retained phase, in degrees; check valid() and turnsValid().
+         */
         POTIO_NODISCARD float angleUnwrappedDeg() const noexcept { return degrees_raw(); }
 
         /**
          * @brief Replace configuration.
+         *
          * @param c New configuration bundle.
          * @param reset_state Clear public state, turn count, and processing history.
          */
@@ -237,6 +304,7 @@ namespace PotIO
 
         /**
          * @brief Explicitly re-arm wrap tracking after a discontinuity.
+         *
          * @param known_turns Turn count the application wants to use as the new reference.
          *
          * @details
@@ -266,10 +334,18 @@ namespace PotIO
             reset_processing_();
         }
 
-        /** @brief Get effective reader full-scale. */
+        /**
+         * @brief Get effective reader full-scale.
+         *
+         * @return Positive reader maximum, or one when the declaration is invalid; update() rejects that configuration.
+         */
         POTIO_NODISCARD int fullScale() const noexcept { return fs_; }
 
     private:
+        /**
+         * @brief Cache the reader range, substituting one for an invalid declaration.
+         * Invalid declarations still cause update() to reject the configuration.
+         */
         void precompute_() noexcept
         {
             const int declared = detail::FullScale<Reader>::value;
@@ -277,6 +353,11 @@ namespace PotIO
             fs_ = full_scale_valid_ ? declared : 1;
         }
 
+        /**
+         * @brief Validate device settings and available policy validation hooks.
+         *
+         * @return InvalidConfiguration for unusable settings, otherwise None; calibration is checked separately.
+         */
         ReadError validate_config_() const noexcept
         {
             if (!full_scale_valid_ || cfg_.min_calibration_span == 0u)
@@ -297,6 +378,13 @@ namespace PotIO
             return ReadError::None;
         }
 
+        /**
+         * @brief Check phase displacement and time since the last accepted tracking sample.
+         *
+         * @param phase Candidate calibrated phase in [0,1].
+         * @param now_ms Current millisecond timestamp.
+         * @return True for an initial seed or an unambiguous displacement within configured speed/delta bounds.
+         */
         bool wrap_sample_plausible_(float phase, uint32_t now_ms) const noexcept
         {
             if (!has_last_phase_)
@@ -330,6 +418,12 @@ namespace PotIO
             return true;
         }
 
+        /**
+         * @brief Seed tracking or count a crossing between opposite hysteresis edge regions.
+         *
+         * @param phase Phase already accepted by wrap_sample_plausible_().
+         * @param now_ms Timestamp to retain as the tracking reference.
+         */
         void accumulate_wrap_(float phase, uint32_t now_ms) noexcept
         {
             if (!has_last_phase_)
@@ -356,6 +450,13 @@ namespace PotIO
             last_phase_ms_ = now_ms;
         }
 
+        /**
+         * @brief Mark this attempt invalid and apply the selected history recovery policy.
+         *
+         * @param error Failure reason.
+         * @param calibration_ok Whether configured calibration is usable.
+         * @param quality Quality flags for this attempt.
+         */
         void fail_(ReadError error, bool calibration_ok, uint16_t quality) noexcept
         {
             detail::mark_failure(st_.status, error, calibration_ok, quality);
@@ -363,6 +464,10 @@ namespace PotIO
                 reset_processing_();
         }
 
+        /**
+         * @brief Discard filter history so the next accepted input seeds processing.
+         * Public output and the attempt clock are retained.
+         */
         void reset_processing_() noexcept
         {
             filtered_centered_ = 0.f;
