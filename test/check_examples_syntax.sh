@@ -18,4 +18,8 @@ for example in "$ROOT_DIR"/examples/*/*.ino; do
 done
 # shellcheck disable=SC2086
 "$CXX" $FLAGS $INCLUDES $DEFINES -x c++ -c "$ROOT_DIR/test/portable_compile/portable_compile.ino" -o "$BUILD_DIR/portable.o"
+# shellcheck disable=SC2086
+"$CXX" $FLAGS $INCLUDES $DEFINES "$ROOT_DIR/test/test_calibration_example.cpp" \
+    "$BUILD_DIR/runtime.o" "$BUILD_DIR/02_PotCalibration.o" -o "$BUILD_DIR/calibration-example"
+"$BUILD_DIR/calibration-example"
 printf 'Example syntax checks passed: %s ESP32-S3-oriented public examples + portable smoke sketch.\n' "$count"

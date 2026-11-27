@@ -23,7 +23,7 @@ Use this checklist for PotIO v1.2.0 before creating a release archive or registr
 - [ ] `./test/check_release_contracts.sh` passes.
 - [ ] `./test/run_host_checks.sh` passes from a clean checkout without generated files.
 - [ ] GitHub Actions compile matrix passes on the release commit.
-- [ ] ESP32-S3 examples compile against the current Arduino-ESP32 core.
+- [ ] ESP32-S3 examples compile against the pinned Arduino-ESP32 environment in `platformio.ini`.
 
 ## Hardware
 
@@ -46,6 +46,8 @@ compilation and native tests do not complete these checks.
 - [ ] All public examples remain beginner-friendly.
 - [ ] `keywords.txt` includes new public types/methods.
 - [ ] `CHANGELOG.md` records every user-visible change.
-- [ ] No `.DS_Store`, `__MACOSX`, build output, archives, or editor state is packaged.
-- [ ] Release ZIP is unpacked and all local tests are rerun from the unpacked copy.
-- [ ] Final archive checksum is recorded.
+- [ ] The committed tree and Git index match `test/package_inventory.txt`.
+- [ ] GitHub source ZIP/TAR, PlatformIO TAR, and Arduino ZIP references pass the exact-commit distribution check.
+- [ ] The unpacked source ZIP passes the host checks, and the unpacked PlatformIO package compiles on ESP32-S3.
+- [ ] Every final archive's SHA-256 is bound to the release review.
+- [ ] The actual public downloads pass the per-channel inventory, byte, and archive checks.

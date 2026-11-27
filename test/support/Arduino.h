@@ -16,10 +16,14 @@
 class PotIOSerialMock
 {
 public:
+    int (*inputAvailable)() = nullptr;
+    int (*readInput)() = nullptr;
+    void (*onLine)(const char *) = nullptr;
+
     void begin(unsigned long baud) { (void)baud; }
     explicit operator bool() const { return true; }
-    int available() const { return 0; }
-    int read() { return -1; }
+    int available() const { return inputAvailable ? inputAvailable() : 0; }
+    int read() { return readInput ? readInput() : -1; }
     void print(const char *v) { (void)v; }
     void print(char v) { (void)v; }
     void print(int v) { (void)v; }
@@ -28,7 +32,7 @@ public:
     void print(unsigned long v) { (void)v; }
     void print(float v, int digits = 2) { (void)v; (void)digits; }
     void println() {}
-    void println(const char *v) { (void)v; }
+    void println(const char *v) { if (onLine) onLine(v); }
     void println(int v) { (void)v; }
     void println(unsigned int v) { (void)v; }
     void println(long v) { (void)v; }
@@ -37,8 +41,9 @@ public:
 };
 
 extern PotIOSerialMock Serial;
+extern int (*potIOAnalogInput)();
 
 inline void delay(unsigned long ms) { (void)ms; }
 inline std::uint32_t millis() { return 0u; }
-inline int analogRead(std::uint8_t pin) { (void)pin; return 2048; }
+inline int analogRead(std::uint8_t pin) { (void)pin; return potIOAnalogInput ? potIOAnalogInput() : 2048; }
 inline std::uint32_t analogReadMilliVolts(std::uint8_t pin) { (void)pin; return 1650u; }

@@ -136,14 +136,15 @@ void setup()
     Serial.println(maxValue);
 
     const PotCalib calib{minValue, centerValue, maxValue};
-    printResult(calib);
-
     if (!calib.valid_centered())
     {
         Serial.println();
-        Serial.println("Warning: expected min < center < max.");
+        Serial.println("Calibration rejected: expected min < center < max.");
         Serial.println("Check wiring, pot direction, and whether the center point was captured correctly.");
+        Serial.println("Restart calibration after correcting the problem.");
+        return;
     }
+    printResult(calib);
 }
 
 void loop()

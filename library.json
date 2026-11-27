@@ -42,5 +42,39 @@
     "examples/06_PotShaping/06_PotShaping.ino",
     "examples/07_PotSteering/07_PotSteering.ino",
     "examples/08_SteppedPotModeKnob/08_SteppedPotModeKnob.ino"
-  ]
+  ],
+  "export": {
+    "include": [
+      "CHANGELOG.md",
+      "LICENSE",
+      "README.md",
+      "examples/01_LinearPotBasic/01_LinearPotBasic.ino",
+      "examples/02_PotCalibration/02_PotCalibration.ino",
+      "examples/03_ContinuousPotAdvanced/03_ContinuousPotAdvanced.ino",
+      "examples/04_Joystick2DKY023/04_Joystick2DKY023.ino",
+      "examples/05_ESP32ADC/05_ESP32ADC.ino",
+      "examples/06_PotShaping/06_PotShaping.ino",
+      "examples/07_PotSteering/07_PotSteering.ino",
+      "examples/08_SteppedPotModeKnob/08_SteppedPotModeKnob.ino",
+      "keywords.txt",
+      "library.json",
+      "library.properties",
+      "src/PotIO.h",
+      "src/PotIO_Arduino.h",
+      "src/PotIO_Compatibility.h",
+      "src/PotIO_Detail.h",
+      "src/PotIO_Factory.h",
+      "src/PotIO_Filters.h",
+      "src/PotIO_JitterTools.h",
+      "src/PotIO_RateLimit.h",
+      "src/PotIO_Shaping.h",
+      "src/PotIO_Types.h",
+      "src/devices/PotIO_ContinuousPot.h",
+      "src/devices/PotIO_Joystick2D.h",
+      "src/devices/PotIO_LinearPot.h",
+      "src/devices/PotIO_SteppedPot.h",
+      "src/devices/helpers/PotIO_AnalogStick.h",
+      "src/devices/helpers/PotIO_ContinuousPotHelpers.h"
+    ]
+  }
 }

@@ -107,7 +107,7 @@ PotIO has no dependency on SnapshotBus, SafetyCore, NVMKit, SteerCore, or anothe
 
 ### PlatformIO
 
-Add PotIO to the project's library dependencies, or place the library in the project's `lib/` directory.
+Add `littlemanbuilds/PotIO` to `lib_deps` to install a published Registry version. For a source checkout, place the library in the project's `lib/` directory.
 
 Then include:
 
@@ -124,6 +124,8 @@ Copy the `PotIO` folder into your Arduino libraries directory. The folder should
 ## Supported targets
 
 PotIO is portable across the architectures declared by `library.properties`. ESP32-S3 is the normal local reference target; CI keeps one representative compile target for AVR, megaAVR, SAM, SAMD, ESP32, ESP8266, STM32, Teensy and RP2040. Hardware-specific ADC behaviour still has to be validated on the actual board and wiring used by the application.
+
+The examples use ESP32-S3 pin assignments on ESP32 builds. Check the ADC pin assignments for your board before wiring. A two-axis joystick requires two independent ADC channels.
 
 ---
 
@@ -796,7 +798,10 @@ The uncalibrated millivolt factory now seeds an ideal `0 / FullScaleMv/2 / FullS
 PotIO::setEsp32PinAttenuation(pin, 11);
 ```
 
-is an ESP32 convenience and a no-op elsewhere.
+is an ESP32 convenience and a no-op elsewhere. On Arduino-ESP32 3.3.8 a pin must
+already be configured as an ADC channel before the core applies per-pin
+attenuation. When selecting a non-default value, perform an initial analog read
+in `setup()`, discard that reading, then apply the setting before using samples.
 
 Always verify:
 
@@ -938,6 +943,10 @@ PotIO keeps the public examples progressive rather than turning every sketch int
 | `08_SteppedPotModeKnob` | Stable analog mode selector with hysteresis. |
 
 The examples use ESP32-S3-friendly ADC choices where possible and retain generic Arduino fallbacks.
+
+For the KY-023 joystick example on an ESP32-S3 DevKitC-1, connect VRx to GPIO4,
+VRy to GPIO5, the module supply to 3.3 V, and its GND to board GND. Leave the
+switch pin disconnected for this example.
 
 ---
 

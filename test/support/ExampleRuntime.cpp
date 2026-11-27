@@ -10,3 +10,4 @@
  */
 #include <Arduino.h>
 PotIOSerialMock Serial;
+int (*potIOAnalogInput)() = nullptr;

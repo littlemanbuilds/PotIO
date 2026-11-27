@@ -2,7 +2,7 @@
 
 All notable PotIO changes are documented here.
 
-## [1.2.0] - 2026-09-07
+## [1.2.0] - 2026-11-27
 
 ### Added
 
@@ -16,6 +16,12 @@ All notable PotIO changes are documented here.
 
 - Default-constructed devices now cache custom-reader full-scale consistently with Config-constructed devices, including rejection of non-positive declarations.
 - Reader full-scale declarations above `UINT16_MAX`, including the configured fallback for readers without `kFullScale`, are rejected before narrowing to prevent truncation of public raw/calibration coordinates.
+- PlatformIO exports are limited to the library source, examples, metadata, documentation, and license. Release checks compare each channel's archive with its intended inventory and committed file contents.
+- The calibration example rejects invalid captures before printing calibration settings to copy.
+
+### Changed
+
+- PlatformIO CI uses Python 3.11 and PlatformIO Core 6.1.19.
 
 ## [1.1.0] - 2026-09-01
 
